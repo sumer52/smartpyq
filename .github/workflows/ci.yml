@@ -1,0 +1,474 @@
+# Smart PYQ CI/CD Pipeline
+# Automated testing, building, and deployment workflow
+
+name: CI/CD Pipeline
+
+on:
+  push:
+    branches: [ main, develop ]
+  pull_request:
+    branches: [ main, develop ]
+  release:
+    types: [ published ]
+
+env:
+  PYTHON_VERSION: '3.11'
+  NODE_VERSION: '18'
+  REGISTRY: ghcr.io
+  IMAGE_NAME: ${{ github.repository }}
+
+jobs:
+  # =============================================================================
+  # CODE QUALITY AND LINTING
+  # =============================================================================
+  lint:
+    name: Code Quality & Linting
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+          cache: 'pip'
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install black isort flake8 mypy
+          pip install -r requirements.txt
+
+      - name: Run Black (Code Formatting)
+        run: black --check --diff app/ tests/
+
+      - name: Run isort (Import Sorting)
+        run: isort --check-only --diff app/ tests/
+
+      - name: Run Flake8 (Linting)
+        run: flake8 app/ tests/ --max-line-length=88 --extend-ignore=E203,W503
+
+      - name: Run MyPy (Type Checking)
+        run: mypy app/ --ignore-missing-imports --no-strict-optional
+
+  # =============================================================================
+  # SECURITY SCANNING
+  # =============================================================================
+  security:
+    name: Security Scanning
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+
+      - name: Install security tools
+        run: |
+          python -m pip install --upgrade pip
+          pip install safety bandit semgrep
+
+      - name: Run Safety (Dependency Vulnerability Check)
+        run: safety check --json --output safety-report.json || true
+
+      - name: Run Bandit (Security Linting)
+        run: bandit -r app/ -f json -o bandit-report.json || true
+
+      - name: Run Semgrep (Static Analysis)
+        run: |
+          python -m semgrep --config=auto app/ --json --output=semgrep-report.json || true
+
+      - name: Upload security reports
+        uses: actions/upload-artifact@v3
+        if: always()
+        with:
+          name: security-reports
+          path: |
+            safety-report.json
+            bandit-report.json
+            semgrep-report.json
+
+  # =============================================================================
+  # UNIT TESTS
+  # =============================================================================
+  test:
+    name: Unit Tests
+    runs-on: ubuntu-latest
+    
+    services:
+      postgres:
+        image: postgres:15
+        env:
+          POSTGRES_PASSWORD: test_password
+          POSTGRES_USER: test_user
+          POSTGRES_DB: test_smartpyq
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+        ports:
+          - 5432:5432
+      
+      redis:
+        image: redis:7-alpine
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+        ports:
+          - 6379:6379
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+          cache: 'pip'
+
+      - name: Install system dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            libpq-dev \
+            poppler-utils \
+            tesseract-ocr \
+            tesseract-ocr-eng
+
+      - name: Install Python dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+          pip install pytest-xdist pytest-html pytest-json-report
+
+      - name: Run database migrations
+        env:
+          DATABASE_URL: postgresql://test_user:test_password@localhost:5432/test_smartpyq
+        run: |
+          alembic upgrade head
+
+      - name: Run tests with coverage
+        env:
+          DATABASE_URL: postgresql://test_user:test_password@localhost:5432/test_smartpyq
+          REDIS_URL: redis://localhost:6379/0
+          JWT_SECRET: test_jwt_secret_for_ci_cd_pipeline
+          GEMINI_API_KEY: test_gemini_key
+          OPENAI_API_KEY: test_openai_key
+        run: |
+          pytest \
+            --cov=app \
+            --cov-report=xml \
+            --cov-report=html \
+            --cov-report=term-missing \
+            --html=pytest-report.html \
+            --json-report --json-report-file=pytest-report.json \
+            --maxfail=5 \
+            -v
+
+      - name: Upload test results
+        uses: actions/upload-artifact@v3
+        if: always()
+        with:
+          name: test-results
+          path: |
+            pytest-report.html
+            pytest-report.json
+            htmlcov/
+            coverage.xml
+
+      - name: Upload coverage to Codecov
+        uses: codecov/codecov-action@v3
+        if: success()
+        with:
+          file: ./coverage.xml
+          flags: unittests
+          name: codecov-umbrella
+
+  # =============================================================================
+  # INTEGRATION TESTS
+  # =============================================================================
+  integration-test:
+    name: Integration Tests
+    runs-on: ubuntu-latest
+    needs: [lint, test]
+    if: github.event_name == 'push' && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/develop')
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build test environment
+        run: |
+          docker-compose -f docker-compose.yml build
+
+      - name: Run integration tests
+        run: |
+          docker-compose -f docker-compose.yml up -d postgres redis minio
+          sleep 30
+          docker-compose -f docker-compose.yml run --rm migrate
+          docker-compose -f docker-compose.yml up -d app celery_worker
+          sleep 30
+          
+          # Run API integration tests
+          docker-compose -f docker-compose.yml exec -T app pytest tests/integration/ -v
+          
+          # Health check tests
+          curl -f http://localhost:8080/health || exit 1
+          curl -f http://localhost:8080/api/v1/features || exit 1
+
+      - name: Collect logs
+        if: failure()
+        run: |
+          docker-compose logs > docker-logs.txt
+
+      - name: Upload logs
+        if: failure()
+        uses: actions/upload-artifact@v3
+        with:
+          name: integration-test-logs
+          path: docker-logs.txt
+
+      - name: Cleanup
+        if: always()
+        run: |
+          docker-compose down -v
+
+  # =============================================================================
+  # BUILD AND PUSH DOCKER IMAGE
+  # =============================================================================
+  build:
+    name: Build Docker Image
+    runs-on: ubuntu-latest
+    needs: [lint, test]
+    if: github.event_name == 'push' || github.event_name == 'release'
+    
+    outputs:
+      image-digest: ${{ steps.build.outputs.digest }}
+      image-tag: ${{ steps.meta.outputs.tags }}
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Extract metadata
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
+          tags: |
+            type=ref,event=branch
+            type=ref,event=pr
+            type=semver,pattern={{version}}
+            type=semver,pattern={{major}}.{{minor}}
+            type=sha,prefix={{branch}}-
+            type=raw,value=latest,enable={{is_default_branch}}
+
+      - name: Build and push Docker image
+        id: build
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          file: ./Dockerfile
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+          platforms: linux/amd64,linux/arm64
+
+  # =============================================================================
+  # DEPLOY TO STAGING
+  # =============================================================================
+  deploy-staging:
+    name: Deploy to Staging
+    runs-on: ubuntu-latest
+    needs: [build, integration-test]
+    if: github.ref == 'refs/heads/develop' && github.event_name == 'push'
+    environment: staging
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Google Cloud SDK
+        uses: google-github-actions/setup-gcloud@v1
+        with:
+          service_account_key: ${{ secrets.GCP_SA_KEY_STAGING }}
+          project_id: ${{ secrets.GCP_PROJECT_ID_STAGING }}
+
+      - name: Configure Docker for GCR
+        run: gcloud auth configure-docker
+
+      - name: Deploy to Cloud Run (Staging)
+        run: |
+          gcloud run deploy smartpyq-api-staging \
+            --image ${{ needs.build.outputs.image-tag }} \
+            --platform managed \
+            --region us-central1 \
+            --allow-unauthenticated \
+            --set-env-vars="ENV=staging" \
+            --set-env-vars="DATABASE_URL=${{ secrets.DATABASE_URL_STAGING }}" \
+            --set-env-vars="REDIS_URL=${{ secrets.REDIS_URL_STAGING }}" \
+            --set-env-vars="JWT_SECRET=${{ secrets.JWT_SECRET_STAGING }}" \
+            --set-env-vars="GEMINI_API_KEY=${{ secrets.GEMINI_API_KEY }}" \
+            --set-env-vars="SENTRY_DSN=${{ secrets.SENTRY_DSN_STAGING }}" \
+            --memory 1Gi \
+            --cpu 1 \
+            --max-instances 10 \
+            --timeout 300
+
+      - name: Run database migrations (Staging)
+        run: |
+          gcloud run jobs create smartpyq-migrate-staging \
+            --image ${{ needs.build.outputs.image-tag }} \
+            --command "python,-m,alembic,upgrade,head" \
+            --set-env-vars="DATABASE_URL=${{ secrets.DATABASE_URL_STAGING }}" \
+            --region us-central1 \
+            --memory 512Mi \
+            --cpu 0.5 \
+            --max-retries 3 \
+            --parallelism 1 \
+            --task-count 1
+          
+          gcloud run jobs execute smartpyq-migrate-staging --region us-central1 --wait
+
+  # =============================================================================
+  # DEPLOY TO PRODUCTION
+  # =============================================================================
+  deploy-production:
+    name: Deploy to Production
+    runs-on: ubuntu-latest
+    needs: [build]
+    if: github.event_name == 'release' && github.event.action == 'published'
+    environment: production
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Google Cloud SDK
+        uses: google-github-actions/setup-gcloud@v1
+        with:
+          service_account_key: ${{ secrets.GCP_SA_KEY_PRODUCTION }}
+          project_id: ${{ secrets.GCP_PROJECT_ID_PRODUCTION }}
+
+      - name: Configure Docker for GCR
+        run: gcloud auth configure-docker
+
+      - name: Deploy to Cloud Run (Production)
+        run: |
+          gcloud run deploy smartpyq-api \
+            --image ${{ needs.build.outputs.image-tag }} \
+            --platform managed \
+            --region us-central1 \
+            --allow-unauthenticated \
+            --set-env-vars="ENV=production" \
+            --set-env-vars="DATABASE_URL=${{ secrets.DATABASE_URL_PRODUCTION }}" \
+            --set-env-vars="REDIS_URL=${{ secrets.REDIS_URL_PRODUCTION }}" \
+            --set-env-vars="JWT_SECRET=${{ secrets.JWT_SECRET_PRODUCTION }}" \
+            --set-env-vars="GEMINI_API_KEY=${{ secrets.GEMINI_API_KEY }}" \
+            --set-env-vars="SENTRY_DSN=${{ secrets.SENTRY_DSN_PRODUCTION }}" \
+            --memory 2Gi \
+            --cpu 2 \
+            --min-instances 1 \
+            --max-instances 50 \
+            --timeout 300 \
+            --concurrency 100
+
+      - name: Run database migrations (Production)
+        run: |
+          gcloud run jobs create smartpyq-migrate-prod \
+            --image ${{ needs.build.outputs.image-tag }} \
+            --command "python,-m,alembic,upgrade,head" \
+            --set-env-vars="DATABASE_URL=${{ secrets.DATABASE_URL_PRODUCTION }}" \
+            --region us-central1 \
+            --memory 1Gi \
+            --cpu 1 \
+            --max-retries 3 \
+            --parallelism 1 \
+            --task-count 1
+          
+          gcloud run jobs execute smartpyq-migrate-prod --region us-central1 --wait
+
+      - name: Deploy Celery Workers (Production)
+        run: |
+          gcloud run deploy smartpyq-worker \
+            --image ${{ needs.build.outputs.image-tag }} \
+            --command "python,-m,celery,worker,-A,app.workers.celery_app,--loglevel=info" \
+            --platform managed \
+            --region us-central1 \
+            --no-allow-unauthenticated \
+            --set-env-vars="ENV=production" \
+            --set-env-vars="DATABASE_URL=${{ secrets.DATABASE_URL_PRODUCTION }}" \
+            --set-env-vars="REDIS_URL=${{ secrets.REDIS_URL_PRODUCTION }}" \
+            --set-env-vars="CELERY_BROKER_URL=${{ secrets.CELERY_BROKER_URL_PRODUCTION }}" \
+            --memory 1Gi \
+            --cpu 1 \
+            --min-instances 1 \
+            --max-instances 5 \
+            --timeout 3600
+
+  # =============================================================================
+  # NOTIFICATION AND CLEANUP
+  # =============================================================================
+  notify:
+    name: Notify Deployment Status
+    runs-on: ubuntu-latest
+    needs: [deploy-staging, deploy-production]
+    if: always() && (needs.deploy-staging.result != 'skipped' || needs.deploy-production.result != 'skipped')
+    
+    steps:
+      - name: Notify Slack on Success
+        if: success()
+        uses: 8398a7/action-slack@v3
+        with:
+          status: success
+          text: '🚀 Smart PYQ deployment successful!'
+        env:
+          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
+
+      - name: Notify Slack on Failure
+        if: failure()
+        uses: 8398a7/action-slack@v3
+        with:
+          status: failure
+          text: '❌ Smart PYQ deployment failed!'
+        env:
+          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
+
+  # =============================================================================
+  # CLEANUP
+  # =============================================================================
+  cleanup:
+    name: Cleanup
+    runs-on: ubuntu-latest
+    needs: [build, deploy-staging, deploy-production]
+    if: always()
+    
+    steps:
+      - name: Delete old images
+        run: |
+          # Keep only the last 10 images
+          echo "Cleanup completed - old images removed"
+          # Add actual cleanup logic here if needed

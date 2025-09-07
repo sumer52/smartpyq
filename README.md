@@ -1,0 +1,640 @@
+# Smart PYQ - AI-Powered Previous Year Questions Platform
+
+[![CI/CD Pipeline](https://github.com/your-org/smart-pyq/actions/workflows/ci.yml/badge.svg)](https://github.com/your-org/smart-pyq/actions/workflows/ci.yml)
+[![Coverage](https://codecov.io/gh/your-org/smart-pyq/branch/main/graph/badge.svg)](https://codecov.io/gh/your-org/smart-pyq)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+[![Python 3.11+](https://img.shields.io/badge/python-3.11+-blue.svg)](https://www.python.org/downloads/)
+[![FastAPI](https://img.shields.io/badge/FastAPI-0.104+-green.svg)](https://fastapi.tiangolo.com/)
+
+A production-ready, scalable backend API for managing Previous Year Questions (PYQ) with AI-powered chatbot integration, multi-tenant architecture, and comprehensive paper management system.
+
+## 🚀 Features
+
+### Core Functionality
+- **Multi-tenant Architecture**: College/university domain-based access control
+- **AI Chatbot Integration**: Gemini API with OpenAI fallback for intelligent Q&A
+- **Paper Management**: Upload, process, search, and manage academic papers
+- **Authentication & Authorization**: JWT-based auth with role-based access control
+- **File Processing Pipeline**: PDF processing, OCR, thumbnail generation, watermarking
+- **Real-time Chat**: Streaming responses with session management
+- **Newsletter System**: Subscription and bulk email management
+- **Analytics & Monitoring**: Usage analytics and performance monitoring
+
+### Technical Features
+- **FastAPI Framework**: High-performance async API with automatic OpenAPI docs
+- **PostgreSQL Database**: Robust relational database with Alembic migrations
+- **Redis Caching**: High-performance caching and session management
+- **Celery Workers**: Background job processing for file uploads and emails
+- **Docker Support**: Containerized deployment with docker-compose
+- **CI/CD Pipeline**: GitHub Actions for automated testing and deployment
+- **Security**: Rate limiting, CORS, security headers, input validation
+- **Monitoring**: Sentry integration, Prometheus metrics, structured logging
+
+## 📋 Table of Contents
+
+- [Quick Start](#-quick-start)
+- [Installation](#-installation)
+- [Configuration](#-configuration)
+- [Development](#-development)
+- [API Documentation](#-api-documentation)
+- [Deployment](#-deployment)
+- [Testing](#-testing)
+- [Architecture](#-architecture)
+- [Contributing](#-contributing)
+- [License](#-license)
+
+## 🚀 Quick Start
+
+### Prerequisites
+
+- **Docker & Docker Compose**: For containerized development
+- **Python 3.11+**: For local development
+- **PostgreSQL 15+**: Database server
+- **Redis 7+**: Caching and message broker
+- **Git**: Version control
+
+### 1. Clone the Repository
+
+```bash
+git clone https://github.com/your-org/smart-pyq.git
+cd smart-pyq
+```
+
+### 2. Environment Setup
+
+```bash
+# Copy environment template
+cp .env.example .env
+
+# Edit .env with your configuration
+# At minimum, set:
+# - GEMINI_API_KEY (get from Google AI Studio)
+# - JWT_SECRET (generate a secure random string)
+# - SMTP credentials for email functionality
+```
+
+### 3. Start with Docker Compose
+
+```bash
+# Build and start all services
+docker-compose up --build
+
+# Or run in background
+docker-compose up -d --build
+```
+
+### 4. Initialize Database
+
+```bash
+# Run database migrations
+docker-compose exec app python -m alembic upgrade head
+
+# Create initial admin user (optional)
+docker-compose exec app python scripts/create_admin.py
+```
+
+### 5. Access the Application
+
+- **API Documentation**: http://localhost:8080/docs
+- **Alternative Docs**: http://localhost:8080/redoc
+- **Health Check**: http://localhost:8080/health
+- **Flower (Celery Monitor)**: http://localhost:5555
+- **MinIO Console**: http://localhost:9001
+
+## 🛠 Installation
+
+### Local Development Setup
+
+#### 1. Python Environment
+
+```bash
+# Create virtual environment
+python -m venv venv
+
+# Activate virtual environment
+# On Windows:
+venv\Scripts\activate
+# On macOS/Linux:
+source venv/bin/activate
+
+# Install dependencies
+pip install -r requirements.txt
+```
+
+#### 2. Database Setup
+
+```bash
+# Start PostgreSQL (using Docker)
+docker run -d \
+  --name smartpyq_postgres \
+  -e POSTGRES_DB=smartpyq \
+  -e POSTGRES_USER=smartpyq_user \
+  -e POSTGRES_PASSWORD=smartpyq_password \
+  -p 5432:5432 \
+  postgres:15-alpine
+
+# Run migrations
+alembic upgrade head
+```
+
+#### 3. Redis Setup
+
+```bash
+# Start Redis (using Docker)
+docker run -d \
+  --name smartpyq_redis \
+  -p 6379:6379 \
+  redis:7-alpine
+```
+
+#### 4. Start Services
+
+```bash
+# Terminal 1: Start FastAPI server
+uvicorn app.main:app --host 0.0.0.0 --port 8080 --reload
+
+# Terminal 2: Start Celery worker
+celery worker -A app.workers.celery_app --loglevel=info
+
+# Terminal 3: Start Celery beat (scheduler)
+celery beat -A app.workers.celery_app --loglevel=info
+```
+
+## ⚙️ Configuration
+
+### Environment Variables
+
+Key configuration options (see `.env.example` for complete list):
+
+```bash
+# Application
+ENV=development
+PORT=8080
+DEBUG=true
+
+# Database
+DATABASE_URL=postgresql://user:pass@localhost:5432/smartpyq
+
+# Redis
+REDIS_URL=redis://localhost:6379/0
+CELERY_BROKER_URL=redis://localhost:6379/1
+
+# Authentication
+JWT_SECRET=your_super_secret_jwt_key_min_32_chars
+JWT_ACCESS_EXPIRE_SECONDS=900
+JWT_REFRESH_EXPIRE_SECONDS=604800
+
+# AI APIs
+GEMINI_API_KEY=your_gemini_api_key
+OPENAI_API_KEY=your_openai_api_key  # Optional fallback
+
+# Storage (choose one)
+STORAGE_BACKEND=s3  # or 'firebase' or 'local'
+AWS_S3_BUCKET=your-bucket-name
+AWS_ACCESS_KEY_ID=your_access_key
+AWS_SECRET_ACCESS_KEY=your_secret_key
+
+# Email
+SMTP_HOST=smtp.gmail.com
+SMTP_PORT=587
+SMTP_USERNAME=your_email@gmail.com
+SMTP_PASSWORD=your_app_password
+
+# Security
+ALLOWED_HOSTS=localhost,127.0.0.1,yourdomain.com
+CORS_ORIGINS=http://localhost:3000,https://yourdomain.com
+
+# Monitoring
+SENTRY_DSN=your_sentry_dsn  # Optional
+```
+
+### API Keys Setup
+
+#### Google Gemini API
+1. Visit [Google AI Studio](https://makersuite.google.com/app/apikey)
+2. Create a new API key
+3. Set `GEMINI_API_KEY` in your `.env` file
+
+#### OpenAI API (Optional)
+1. Visit [OpenAI API Keys](https://platform.openai.com/api-keys)
+2. Create a new API key
+3. Set `OPENAI_API_KEY` in your `.env` file
+
+## 🔧 Development
+
+### Project Structure
+
+```
+smart-pyq/
+├── app/
+│   ├── main.py              # FastAPI application entry point
+│   ├── config.py            # Configuration management
+│   ├── database.py          # Database connection and session
+│   ├── models/              # SQLAlchemy models
+│   │   ├── __init__.py
+│   │   ├── user.py
+│   │   ├── paper.py
+│   │   ├── chat.py
+│   │   └── ...
+│   ├── routers/             # API route handlers
+│   │   ├── __init__.py
+│   │   ├── auth.py
+│   │   ├── papers.py
+│   │   ├── chat.py
+│   │   └── ...
+│   ├── services/            # Business logic layer
+│   │   ├── __init__.py
+│   │   ├── auth_service.py
+│   │   ├── paper_service.py
+│   │   └── ...
+│   ├── repositories/        # Data access layer
+│   │   ├── __init__.py
+│   │   ├── user_repository.py
+│   │   └── ...
+│   ├── utils/               # Utility functions
+│   │   ├── __init__.py
+│   │   ├── security.py
+│   │   ├── storage.py
+│   │   └── ...
+│   └── workers/             # Celery tasks
+│       ├── __init__.py
+│       ├── celery_app.py
+│       └── tasks.py
+├── alembic/                 # Database migrations
+├── tests/                   # Test suite
+├── scripts/                 # Utility scripts
+├── docker-compose.yml       # Docker services
+├── Dockerfile              # Container definition
+├── requirements.txt        # Python dependencies
+└── README.md               # This file
+```
+
+### Code Quality
+
+```bash
+# Format code
+black app/ tests/
+isort app/ tests/
+
+# Lint code
+flake8 app/ tests/
+mypy app/
+
+# Run pre-commit hooks
+pre-commit run --all-files
+```
+
+### Database Migrations
+
+```bash
+# Create new migration
+alembic revision --autogenerate -m "Description of changes"
+
+# Apply migrations
+alembic upgrade head
+
+# Rollback migration
+alembic downgrade -1
+
+# View migration history
+alembic history
+```
+
+## 📚 API Documentation
+
+### Authentication Endpoints
+
+```http
+POST /api/v1/auth/signup          # User registration
+POST /api/v1/auth/login           # User login
+POST /api/v1/auth/refresh         # Refresh JWT token
+POST /api/v1/auth/send-otp        # Send OTP for verification
+POST /api/v1/auth/verify-otp      # Verify OTP
+```
+
+### Paper Management
+
+```http
+GET    /api/v1/papers             # List papers (with filters)
+GET    /api/v1/papers/{id}        # Get paper details
+POST   /api/v1/papers/upload      # Upload new paper
+GET    /api/v1/papers/{id}/authorize # Get signed URL for download
+POST   /api/v1/papers/{id}/stamp  # Add watermark to paper
+GET    /api/v1/search             # Search papers
+```
+
+### Chat System
+
+```http
+POST   /api/v1/chat               # Send chat message
+GET    /api/v1/chat/stream        # Server-sent events for streaming
+GET    /api/v1/chat/{session_id}/history # Get chat history
+```
+
+### Other Endpoints
+
+```http
+GET    /api/v1/features           # Get platform features
+POST   /api/v1/subscribe          # Newsletter subscription
+GET    /health                    # Health check
+GET    /docs                      # Swagger UI
+GET    /redoc                     # ReDoc documentation
+```
+
+### Example API Usage
+
+#### Authentication
+
+```python
+import httpx
+
+# Login
+response = httpx.post("http://localhost:8080/api/v1/auth/login", json={
+    "email": "user@university.edu",
+    "password": "secure_password"
+})
+token = response.json()["access_token"]
+
+# Use token in subsequent requests
+headers = {"Authorization": f"Bearer {token}"}
+```
+
+#### Chat Integration
+
+```python
+# Send chat message
+response = httpx.post(
+    "http://localhost:8080/api/v1/chat",
+    headers=headers,
+    json={
+        "prompt": "Explain quantum mechanics",
+        "session_id": "optional-session-id"
+    }
+)
+
+# Streaming chat (Server-Sent Events)
+import sseclient
+
+response = httpx.post(
+    "http://localhost:8080/api/v1/chat/stream",
+    headers=headers,
+    json={"prompt": "Explain quantum mechanics"},
+    stream=True
+)
+
+for line in response.iter_lines():
+    if line.startswith("data: "):
+        data = json.loads(line[6:])
+        print(data["content"], end="")
+```
+
+## 🚀 Deployment
+
+### Google Cloud Run
+
+#### Prerequisites
+1. Google Cloud Project with billing enabled
+2. Cloud Run, Cloud SQL, and Cloud Storage APIs enabled
+3. Service account with necessary permissions
+
+#### Setup
+
+```bash
+# Install Google Cloud SDK
+# https://cloud.google.com/sdk/docs/install
+
+# Authenticate
+gcloud auth login
+gcloud config set project YOUR_PROJECT_ID
+
+# Create Cloud SQL instance
+gcloud sql instances create smartpyq-db \
+  --database-version=POSTGRES_15 \
+  --tier=db-f1-micro \
+  --region=us-central1
+
+# Create database
+gcloud sql databases create smartpyq --instance=smartpyq-db
+
+# Create Redis instance
+gcloud redis instances create smartpyq-redis \
+  --size=1 \
+  --region=us-central1 \
+  --redis-version=redis_7_0
+
+# Create storage bucket
+gsutil mb gs://your-smartpyq-bucket
+```
+
+#### Deploy
+
+```bash
+# Build and push image
+docker build -t gcr.io/YOUR_PROJECT_ID/smartpyq-api .
+docker push gcr.io/YOUR_PROJECT_ID/smartpyq-api
+
+# Deploy to Cloud Run
+gcloud run deploy smartpyq-api \
+  --image gcr.io/YOUR_PROJECT_ID/smartpyq-api \
+  --platform managed \
+  --region us-central1 \
+  --allow-unauthenticated \
+  --set-env-vars="DATABASE_URL=postgresql://..." \
+  --set-env-vars="REDIS_URL=redis://..." \
+  --memory 2Gi \
+  --cpu 2 \
+  --max-instances 10
+```
+
+### AWS Lambda (Alternative)
+
+```bash
+# Install Serverless Framework
+npm install -g serverless
+
+# Deploy using serverless.yml (create this file)
+serverless deploy --stage production
+```
+
+### Docker Swarm/Kubernetes
+
+See `k8s/` directory for Kubernetes manifests (create as needed).
+
+## 🧪 Testing
+
+### Run Tests
+
+```bash
+# Run all tests
+pytest
+
+# Run with coverage
+pytest --cov=app --cov-report=html
+
+# Run specific test file
+pytest tests/test_auth.py -v
+
+# Run integration tests
+pytest tests/integration/ -v
+
+# Run tests in parallel
+pytest -n auto
+```
+
+### Test Categories
+
+- **Unit Tests**: `tests/test_*.py` - Test individual components
+- **Integration Tests**: `tests/integration/` - Test API endpoints
+- **Performance Tests**: Load testing with locust (optional)
+
+### Test Data
+
+Test fixtures are defined in `tests/conftest.py`. The test suite uses:
+- In-memory SQLite for fast database tests
+- Mock Redis for caching tests
+- Factory Boy for generating test data
+- Pytest fixtures for common test setup
+
+## 🏗 Architecture
+
+### System Architecture
+
+```
+┌─────────────────┐    ┌─────────────────┐    ┌─────────────────┐
+│   Frontend      │    │   Load Balancer │    │   CDN/Storage   │
+│   (React/Vue)   │◄──►│   (Nginx/ALB)   │◄──►│   (S3/Firebase) │
+└─────────────────┘    └─────────────────┘    └─────────────────┘
+         │                       │
+         ▼                       ▼
+┌─────────────────────────────────────────────────────────────────┐
+│                    FastAPI Application                         │
+│  ┌─────────────┐  ┌─────────────┐  ┌─────────────────────────┐ │
+│  │   Routers   │  │  Services   │  │      Repositories       │ │
+│  │ (API Layer) │◄─│ (Business)  │◄─│    (Data Access)       │ │
+│  └─────────────┘  └─────────────┘  └─────────────────────────┘ │
+└─────────────────────────────────────────────────────────────────┘
+         │                       │                       │
+         ▼                       ▼                       ▼
+┌─────────────────┐    ┌─────────────────┐    ┌─────────────────┐
+│   PostgreSQL    │    │      Redis      │    │  Celery Workers │
+│   (Database)    │    │   (Cache/Queue) │    │ (Background)    │
+└─────────────────┘    └─────────────────┘    └─────────────────┘
+         │                       │                       │
+         ▼                       ▼                       ▼
+┌─────────────────┐    ┌─────────────────┐    ┌─────────────────┐
+│   Monitoring    │    │   AI Services   │    │   External APIs │
+│ (Sentry/Metrics)│    │ (Gemini/OpenAI) │    │  (SMTP/Storage) │
+└─────────────────┘    └─────────────────┘    └─────────────────┘
+```
+
+### Design Patterns
+
+- **Repository Pattern**: Data access abstraction
+- **Service Layer**: Business logic separation
+- **Dependency Injection**: Loose coupling
+- **Factory Pattern**: Object creation
+- **Observer Pattern**: Event handling
+- **Strategy Pattern**: Algorithm selection (AI providers)
+
+### Security Architecture
+
+- **Authentication**: JWT tokens with refresh mechanism
+- **Authorization**: Role-based access control (RBAC)
+- **Input Validation**: Pydantic models
+- **Rate Limiting**: Per-user and per-endpoint limits
+- **CORS**: Configurable cross-origin policies
+- **Security Headers**: HSTS, CSP, X-Frame-Options
+- **Data Encryption**: At rest and in transit
+
+## 🤝 Contributing
+
+### Development Workflow
+
+1. **Fork the repository**
+2. **Create feature branch**: `git checkout -b feature/amazing-feature`
+3. **Make changes and add tests**
+4. **Run quality checks**: `black`, `isort`, `flake8`, `mypy`
+5. **Run test suite**: `pytest`
+6. **Commit changes**: `git commit -m 'Add amazing feature'`
+7. **Push to branch**: `git push origin feature/amazing-feature`
+8. **Create Pull Request**
+
+### Code Standards
+
+- **Python Style**: Follow PEP 8, use Black formatter
+- **Type Hints**: Use type annotations throughout
+- **Documentation**: Docstrings for all public functions
+- **Testing**: Maintain >90% test coverage
+- **Commits**: Use conventional commit messages
+
+### Pre-commit Hooks
+
+```bash
+# Install pre-commit
+pip install pre-commit
+
+# Install hooks
+pre-commit install
+
+# Run manually
+pre-commit run --all-files
+```
+
+## 📄 License
+
+This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
+
+## 🆘 Support
+
+### Documentation
+- **API Docs**: Available at `/docs` when running
+- **Architecture**: See `docs/architecture.md`
+- **Deployment**: See `docs/deployment.md`
+
+### Getting Help
+- **Issues**: [GitHub Issues](https://github.com/your-org/smart-pyq/issues)
+- **Discussions**: [GitHub Discussions](https://github.com/your-org/smart-pyq/discussions)
+- **Email**: support@smartpyq.com
+
+### Troubleshooting
+
+#### Common Issues
+
+1. **Database Connection Error**
+   ```bash
+   # Check if PostgreSQL is running
+   docker ps | grep postgres
+   
+   # Check connection
+   psql -h localhost -U smartpyq_user -d smartpyq
+   ```
+
+2. **Redis Connection Error**
+   ```bash
+   # Check if Redis is running
+   docker ps | grep redis
+   
+   # Test connection
+   redis-cli ping
+   ```
+
+3. **Celery Worker Not Processing Tasks**
+   ```bash
+   # Check worker status
+   celery -A app.workers.celery_app inspect active
+   
+   # Restart worker
+   docker-compose restart celery_worker
+   ```
+
+4. **File Upload Issues**
+   - Check storage configuration in `.env`
+   - Verify bucket permissions
+   - Check file size limits
+
+---
+
+**Built with ❤️ using FastAPI, PostgreSQL, Redis, and modern Python practices.**
+
+For more information, visit our [documentation](https://docs.smartpyq.com) or [contact us](mailto:support@smartpyq.com).#   s m a r t p y q - p r o j e c t  
+ 

@@ -18,7 +18,7 @@ const HomePage = () => {
     totalPapers: 0,
     totalDownloads: 0,
     activeUsers: 0,
-    universities: 0
+
   });
 
   useEffect(() => {

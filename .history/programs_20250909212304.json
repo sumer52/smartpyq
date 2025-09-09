@@ -1,0 +1,63 @@
+{
+  "BSc": {
+    "MSCS": {
+      "1st Year": {
+  "Semester 1": ["Environmental Studies", "English-1", "Hindi", "Telugu", "Sanskrit", "Differential & Integral Calculus", "Descriptive Statistics and Probability", "Programming in C"],
+  "Semester 2": ["Environmental Studies", "English-2", "Hindi", "Telugu", "Sanskrit", "Differential Equations", "Probability Distributions", "Programming in C++"]
+      },
+      "2nd Year": {
+  "Semester 3": ["English-3", "Hindi", "Telugu", "Sanskrit", "Linear Algebra", "Probability & Statistics-II", "Data Structures and Algorithms", "Computer Organization", "Mathematics Practical", "CS Practical"],
+  "Semester 4": ["English-4", "Hindi", "Telugu", "Sanskrit", "Real Analysis", "Statistical Methods", "Database Management Systems", "Operating Systems", "Mathematics Practical", "CS Practical"]
+      },
+      "3rd Year": {
+  "Semester 5": ["English-5", "Hindi", "Telugu", "Sanskrit", "Complex Analysis", "Regression & Multivariate Statistics", "Computer Networks", "Software Engineering", "Mathematics Practical", "CS Practical"],
+  "Semester 6": ["English-6", "Hindi", "Telugu", "Sanskrit", "Numerical Analysis", "Design of Experiments", "Web Technologies", "Machine Learning", "Mathematics Practical", "CS Practical"]
+      }
+    },
+    "MSDS": {
+      "1st Year": {
+        "Semester 1": ["Environmental Studies", "English-1", "Hindi", "Sanskrit", "Telugu", "Problem Solving and Python Programming"],
+        "Semester 2": ["Environmental Studies", "English-2", "Hindi", "Sanskrit", "Telugu", "Data Structures and Algorithms"]
+      },
+      "2nd Year": {
+        "Semester 3": ["English-3", "Hindi", "Sanskrit", "Telugu", "Probability & Statistics III", "Linear Algebra", "Database Management Systems", "Python Practical"],
+        "Semester 4": ["English-4", "Hindi", "Sanskrit", "Telugu", "Regression Analysis", "Real Analysis", "Big Data Fundamentals", "Data Science Lab"]
+      },
+      "3rd Year": {
+        "Semester 5": ["English-5", "Second Language V", "Machine Learning", "Statistical Inference", "Data Visualization", "Python/ML Practical"],
+        "Semester 6": ["English-6", "Second Language VI", "Deep Learning", "Time Series Analysis", "Capstone Project", "Data Science Practical"]
+      }
+    },
+    "Life Sciences": {
+      "1st Year": {
+        "Semester 1": ["Environmental Studies", "English-1", "Second Language I", "General Microbiology"],
+        "Semester 2": ["Environmental Studies", "English-2", "Second Language II", "Microbial Diversity"]
+      },
+      "2nd Year": {
+        "Semester 3": ["English-3", "Second Language III", "Biochemistry I", "Genetics I", "Microbiology Lab"],
+        "Semester 4": ["English-4", "Second Language IV", "Biochemistry II", "Genetics II", "Cell Biology Lab"]
+      },
+      "3rd Year": {
+        "Semester 5": ["English-5", "Second Language V", "Molecular Biology", "Immunology", "Biochemistry Lab"],
+        "Semester 6": ["English-6", "Second Language VI", "Genomics", "Biotechnology", "Research Project/Practical"]
+      }
+    }
+  },
+  "BCom": {
+    "General": {
+      "1st Year": {
+        "Semester 1": ["English-1", "Second Language I", "Financial Accounting-I", "Business Organization and Management", "Business Economics"],
+        "Semester 2": ["English-2", "Second Language II", "Financial Accounting-II", "Business Laws", "Banking and Financial Services"]
+      },
+      "2nd Year": {
+        "Semester 3": ["English-3", "Second Language III", "Corporate Accounting", "Business Statistics I", "Cost Accounting"],
+        "Semester 4": ["English-4", "Second Language IV", "Income Tax I", "Business Statistics II", "Auditing I"]
+      },
+      "3rd Year": {
+        "Semester 5": ["English-5", "Second Language V", "Advanced Accounting", "Cost and Management Accounting", "Financial Management I"],
+        "Semester 6": ["English-6", "Second Language VI", "Project Work", "Financial Management II", "International Trade"]
+      }
+    }
+  },
+  "languages": ["Hindi", "English", "Telugu"]
+}

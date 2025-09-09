@@ -40,7 +40,7 @@ const HomePage = () => {
           totalPapers: 15420,
           totalDownloads: 89650,
           activeUsers: 12340,
-          universities: 450
+        
         });
         
       } catch (error) {

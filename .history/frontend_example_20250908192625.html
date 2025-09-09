@@ -1,0 +1,384 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Smart PYQ Chatbot - Enhanced Integration</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+            background-color: #f5f5f5;
+        }
+        .chat-container {
+            background: white;
+            border-radius: 10px;
+            padding: 20px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+        .messages {
+            height: 400px;
+            overflow-y: auto;
+            border: 1px solid #ddd;
+            padding: 15px;
+            margin-bottom: 15px;
+            border-radius: 5px;
+            background-color: #fafafa;
+        }
+        .message {
+            margin-bottom: 15px;
+            padding: 10px;
+            border-radius: 8px;
+        }
+        .user-message {
+            background-color: #007bff;
+            color: white;
+            text-align: right;
+            margin-left: 20%;
+        }
+        .bot-message {
+            background-color: #e9ecef;
+            color: #333;
+            margin-right: 20%;
+        }
+        .streaming {
+            border-left: 3px solid #007bff;
+            padding-left: 10px;
+            font-style: italic;
+        }
+        .input-container {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 10px;
+        }
+        .controls {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 10px;
+            align-items: center;
+        }
+        input, textarea {
+            flex: 1;
+            padding: 10px;
+            border: 1px solid #ddd;
+            border-radius: 5px;
+            font-size: 14px;
+        }
+        button {
+            padding: 10px 20px;
+            background-color: #007bff;
+            color: white;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            font-size: 14px;
+        }
+        button:hover {
+            background-color: #0056b3;
+        }
+        button:disabled {
+            background-color: #6c757d;
+            cursor: not-allowed;
+        }
+        .status {
+            font-size: 12px;
+            color: #666;
+            margin-bottom: 10px;
+        }
+        .error {
+            color: #dc3545;
+            background-color: #f8d7da;
+            padding: 10px;
+            border-radius: 5px;
+            margin-bottom: 10px;
+        }
+    </style>
+</head>
+<body>
+    <div class="chat-container">
+        <h1>Smart PYQ Chatbot - Enhanced Integration</h1>
+        
+        <div class="controls">
+            <label>
+                User ID: <input type="text" id="userId" value="user_123" placeholder="Enter user ID">
+            </label>
+            <label>
+                Session ID: <input type="text" id="sessionId" placeholder="Auto-generated if empty">
+            </label>
+            <label>
+                <input type="checkbox" id="streamMode"> Enable Streaming
+            </label>
+        </div>
+        
+        <div class="status" id="status">Ready to chat</div>
+        <div class="error" id="error" style="display: none;"></div>
+        
+        <div class="messages" id="messages"></div>
+        
+        <div class="input-container">
+            <textarea id="messageInput" placeholder="Ask me anything about programming, academics, or study tips..." 
+                     rows="2" onkeypress="handleKeyPress(event)"></textarea>
+            <button onclick="sendMessage()" id="sendButton">Send</button>
+        </div>
+        
+        <div class="controls">
+            <button onclick="clearConversation()">Clear Chat</button>
+            <button onclick="getConversationHistory()">Get History</button>
+            <button onclick="testConnection()">Test Connection</button>
+        </div>
+    </div>
+
+    <script>
+        const API_BASE = 'http://localhost:8000';
+        const API_SECRET = 'your-secret-api-key'; // For admin endpoints
+        let currentSessionId = '';
+        
+        // DOM elements
+        const messagesDiv = document.getElementById('messages');
+        const messageInput = document.getElementById('messageInput');
+        const sendButton = document.getElementById('sendButton');
+        const statusDiv = document.getElementById('status');
+        const errorDiv = document.getElementById('error');
+        const userIdInput = document.getElementById('userId');
+        const sessionIdInput = document.getElementById('sessionId');
+        const streamModeCheckbox = document.getElementById('streamMode');
+
+        function showError(message) {
+            errorDiv.textContent = message;
+            errorDiv.style.display = 'block';
+            setTimeout(() => {
+                errorDiv.style.display = 'none';
+            }, 5000);
+        }
+
+        function showStatus(message) {
+            statusDiv.textContent = message;
+        }
+
+        function addMessage(content, isUser = false, isStreaming = false) {
+            const messageDiv = document.createElement('div');
+            messageDiv.className = `message ${isUser ? 'user-message' : 'bot-message'}`;
+            if (isStreaming) messageDiv.classList.add('streaming');
+            messageDiv.textContent = content;
+            messagesDiv.appendChild(messageDiv);
+            messagesDiv.scrollTop = messagesDiv.scrollHeight;
+            return messageDiv;
+        }
+
+        async function sendMessage() {
+            const message = messageInput.value.trim();
+            if (!message) return;
+
+            const userId = userIdInput.value.trim() || 'anonymous';
+            const sessionId = sessionIdInput.value.trim() || currentSessionId;
+            const streamMode = streamModeCheckbox.checked;
+
+            // Add user message to chat
+            addMessage(message, true);
+            messageInput.value = '';
+            
+            // Disable send button
+            sendButton.disabled = true;
+            showStatus(streamMode ? 'Streaming response...' : 'Sending message...');
+
+            try {
+                if (streamMode) {
+                    await handleStreamingResponse(userId, message, sessionId);
+                } else {
+                    await handleRegularResponse(userId, message, sessionId);
+                }
+            } catch (error) {
+                console.error('Error:', error);
+                showError(`Error: ${error.message}`);
+            } finally {
+                sendButton.disabled = false;
+                showStatus('Ready to chat');
+            }
+        }
+
+        async function handleRegularResponse(userId, message, sessionId) {
+            const response = await fetch(`${API_BASE}/api/v1/chat`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({
+                    user_id: userId,
+                    message: message,
+                    session_id: sessionId || undefined,
+                    stream: false
+                })
+            });
+
+            if (!response.ok) {
+                throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+            }
+
+            const data = await response.json();
+            
+            // Update session ID
+            if (data.session_id) {
+                currentSessionId = data.session_id;
+                sessionIdInput.value = data.session_id;
+            }
+
+            // Add bot response
+            addMessage(data.reply);
+            
+            // Update status
+            showStatus(`${data.model_used} • ${data.conversation_length} messages • ${data.tokens_used || 'N/A'} tokens`);
+        }
+
+        async function handleStreamingResponse(userId, message, sessionId) {
+            const response = await fetch(`${API_BASE}/api/v1/chat`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({
+                    user_id: userId,
+                    message: message,
+                    session_id: sessionId || undefined,
+                    stream: true
+                })
+            });
+
+            if (!response.ok) {
+                throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+            }
+
+            // Handle Server-Sent Events
+            const reader = response.body.getReader();
+            const decoder = new TextDecoder();
+            
+            let botMessageDiv = addMessage('', false, true);
+            let fullResponse = '';
+
+            try {
+                while (true) {
+                    const { done, value } = await reader.read();
+                    if (done) break;
+
+                    const chunk = decoder.decode(value);
+                    const lines = chunk.split('\n');
+
+                    for (const line of lines) {
+                        if (line.startsWith('data: ')) {
+                            try {
+                                const data = JSON.parse(line.slice(6));
+                                
+                                if (data.error) {
+                                    throw new Error(data.error);
+                                }
+                                
+                                if (data.content) {
+                                    fullResponse += data.content;
+                                    botMessageDiv.textContent = fullResponse;
+                                }
+                                
+                                if (data.done) {
+                                    botMessageDiv.classList.remove('streaming');
+                                    return;
+                                }
+                            } catch (e) {
+                                console.error('Parse error:', e);
+                            }
+                        }
+                    }
+                }
+            } finally {
+                reader.releaseLock();
+                botMessageDiv.classList.remove('streaming');
+            }
+        }
+
+        async function clearConversation() {
+            const userId = userIdInput.value.trim() || 'anonymous';
+            const sessionId = currentSessionId;
+            
+            if (!sessionId) {
+                showError('No active session to clear');
+                return;
+            }
+
+            try {
+                const response = await fetch(`${API_BASE}/api/v1/conversation/${userId}/${sessionId}`, {
+                    method: 'DELETE',
+                    headers: {
+                        'X-API-Key': API_SECRET
+                    }
+                });
+
+                if (response.ok) {
+                    messagesDiv.innerHTML = '';
+                    currentSessionId = '';
+                    sessionIdInput.value = '';
+                    showStatus('Conversation cleared');
+                } else {
+                    throw new Error(`Failed to clear conversation: ${response.status}`);
+                }
+            } catch (error) {
+                showError(`Error clearing conversation: ${error.message}`);
+            }
+        }
+
+        async function getConversationHistory() {
+            const userId = userIdInput.value.trim() || 'anonymous';
+            const sessionId = currentSessionId;
+            
+            if (!sessionId) {
+                showError('No active session');
+                return;
+            }
+
+            try {
+                const response = await fetch(`${API_BASE}/api/v1/conversation/${userId}/${sessionId}`, {
+                    headers: {
+                        'X-API-Key': API_SECRET
+                    }
+                });
+
+                if (response.ok) {
+                    const data = await response.json();
+                    console.log('Conversation History:', data);
+                    showStatus(`History: ${data.total_messages} messages, ${data.total_tokens} tokens`);
+                } else {
+                    throw new Error(`Failed to get history: ${response.status}`);
+                }
+            } catch (error) {
+                showError(`Error getting history: ${error.message}`);
+            }
+        }
+
+        async function testConnection() {
+            try {
+                const response = await fetch(`${API_BASE}/health`);
+                const data = await response.json();
+                
+                if (response.ok) {
+                    showStatus(`✅ Connected - Gemini: ${data.gemini_api}, Redis: ${data.redis}`);
+                } else {
+                    throw new Error('Health check failed');
+                }
+            } catch (error) {
+                showError(`Connection test failed: ${error.message}`);
+            }
+        }
+
+        function handleKeyPress(event) {
+            if (event.key === 'Enter' && !event.shiftKey) {
+                event.preventDefault();
+                sendMessage();
+            }
+        }
+
+        // Initialize
+        document.addEventListener('DOMContentLoaded', () => {
+            testConnection();
+            messageInput.focus();
+        });
+    </script>
+</body>
+</html>

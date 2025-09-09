@@ -157,7 +157,7 @@ const LoginPage = () => {
                   <h4 className="text-sm font-semibold text-blue-200 mb-1">Demo Credentials</h4>
                   <p className="text-xs text-blue-300 mb-2">Use these credentials to test the login:</p>
                   <div className="text-xs text-blue-200 space-y-1">
-                    <div><strong>Email:</strong> demo@smartpyq.com</div>
+                    <div><strong>Email:</strong> smartpyq@gmail.com</div>
                     <div><strong>Password:</strong> demo123</div>
                   </div>
                 </div>

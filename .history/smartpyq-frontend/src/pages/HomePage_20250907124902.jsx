@@ -15,7 +15,7 @@ const HomePage = () => {
     totalPapers: 0,
     totalDownloads: 0,
     activeUsers: 0,
-    universities: 0
+   
   });
 
   useEffect(() => {
@@ -37,7 +37,7 @@ const HomePage = () => {
           totalPapers: 15420,
           totalDownloads: 89650,
           activeUsers: 12340,
-          universities: 450
+         
         });
         
       } catch (error) {
@@ -50,10 +50,10 @@ const HomePage = () => {
             id: 1,
             title: 'Data Structures and Algorithms - Final Exam 2023',
             subject: 'Computer Science',
-            stream: 'Engineering',
+            stream: 'bsc',
             year: 2023,
             semester: 'Semester 6',
-            university: 'Delhi University',
+            university: 'osmania University',
             difficulty: 'Medium',
             tags: ['algorithms', 'data-structures', 'programming'],
             uploadedAt: '2024-01-15T10:30:00Z',
@@ -69,7 +69,7 @@ const HomePage = () => {
             stream: 'Science',
             year: 2023,
             semester: 'Semester 4',
-            university: 'Mumbai University',
+            university: 'osmania University',
             difficulty: 'Hard',
             tags: ['organic-chemistry', 'reactions', 'mechanisms'],
             uploadedAt: '2024-01-10T14:20:00Z',
@@ -85,7 +85,7 @@ const HomePage = () => {
             stream: 'Commerce',
             year: 2023,
             semester: 'Semester 2',
-            university: 'Calcutta University',
+            university: 'osmania University',
             difficulty: 'Easy',
             tags: ['accounting', 'finance', 'balance-sheet'],
             uploadedAt: '2024-01-08T09:15:00Z',

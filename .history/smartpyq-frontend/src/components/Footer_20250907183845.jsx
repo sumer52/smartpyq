@@ -243,13 +243,13 @@ const Footer = ({ className = "" }) => {
               </div>
               <div className="flex items-center">
                 <PhoneIcon className="h-4 w-4 mr-2" />
-                <a href="tel:+1234567890" className="hover:text-white transition-colors">
-                  +1 (234) 567-8900
+                <a href="tel:+910000000000" className="hover:text-white transition-colors">
+                  +91 00000 00000
                 </a>
               </div>
               <div className="flex items-start">
                 <MapPinIcon className="h-4 w-4 mr-2 mt-0.5 flex-shrink-0" />
-                <span>123 Education Street, Learning City, LC 12345</span>
+                <span>Hyderabad, Telangana</span>
               </div>
             </div>
           </motion.div>

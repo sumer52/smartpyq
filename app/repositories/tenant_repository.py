@@ -19,7 +19,7 @@ from app.core.exceptions import ValidationError, NotFoundError
 class TenantRepository(BaseRepository[Tenant]):
     """Repository for tenant operations."""
     
-    def __init__(self, db: AsyncSession):
+    def __init__(self, db=None):
         super().__init__(db, Tenant)
     
     async def get_by_slug(

@@ -1,366 +1,312 @@
-"""Test configuration and fixtures for Smart PYQ application.
+"""
+Test configuration and shared fixtures for SmartPYQ backend tests.
 
-Provides pytest fixtures for database, authentication, and test utilities.
+Uses an in-memory SQLite database for isolated, fast test execution.
 """
 
 import asyncio
-import os
-import tempfile
-from typing import Generator, Dict, Any
+import io
 import pytest
 import pytest_asyncio
-from fastapi.testclient import TestClient
-from sqlalchemy import create_engine
-from sqlalchemy.orm import sessionmaker
-from sqlalchemy.pool import StaticPool
-
-# Import application components
-from app.main import app
-from app.core.database import get_db, Base
-from app.core.config import settings
-from app.models.user import User
-from app.models.tenant import Tenant
-from app.models.paper import Paper
-from app.repositories.user_repository import UserRepository
-from app.repositories.tenant_repository import TenantRepository
-from app.services.auth_service import AuthService
-from app.utils.security import SecurityUtils
-
-# Test database URL
-TEST_DATABASE_URL = "sqlite:///./test.db"
-
-# Create test engine
-test_engine = create_engine(
-    TEST_DATABASE_URL,
-    connect_args={"check_same_thread": False},
-    poolclass=StaticPool,
+from httpx import AsyncClient, ASGITransport
+from sqlalchemy.ext.asyncio import (
+    AsyncSession,
+    async_sessionmaker,
+    create_async_engine,
 )
 
-TestingSessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=test_engine)
+from app.core.database import Base, get_db
+from app.core.auth import AuthManager
+from app.models.user import User, UserRole, UserStatus
+from app.models.tenant import Tenant
+from app.models.paper import Paper, PaperStatus, ExamType, ProcessingStatus
+from app.models.question import (
+    Question, QuestionGroup, QuestionGroupMember,
+    AnalysisResult, AnalysisStatus, SimilarityMethod,
+)
+from app.models.bookmark import Bookmark
+from app.main import app
+
+# Remove TrustedHostMiddleware so test requests with host="testserver" work
+from fastapi.middleware.trustedhost import TrustedHostMiddleware
+app.middleware_stack = None
+app.user_middleware = [
+    item for item in app.user_middleware
+    if not (hasattr(item, "cls") and item.cls == TrustedHostMiddleware)
+]
+app.middleware_stack = None
+
+
+# ---------------------------------------------------------------------------
+# Event loop
+# ---------------------------------------------------------------------------
 
 @pytest.fixture(scope="session")
 def event_loop():
-    """Create an instance of the default event loop for the test session."""
-    loop = asyncio.get_event_loop_policy().new_event_loop()
+    loop = asyncio.new_event_loop()
     yield loop
     loop.close()
 
-@pytest.fixture(scope="function")
-def db_session():
-    """Create a fresh database session for each test."""
-    # Create tables
-    Base.metadata.create_all(bind=test_engine)
-    
-    # Create session
-    session = TestingSessionLocal()
-    
-    try:
-        yield session
-    finally:
-        session.close()
-        # Drop tables after test
-        Base.metadata.drop_all(bind=test_engine)
 
-@pytest.fixture(scope="function")
-def client(db_session):
-    """Create a test client with database dependency override."""
-    def override_get_db():
-        try:
-            yield db_session
-        finally:
-            pass
-    
-    app.dependency_overrides[get_db] = override_get_db
-    
-    with TestClient(app) as test_client:
-        yield test_client
-    
-    # Clean up
+# ---------------------------------------------------------------------------
+# Database fixtures (in-memory SQLite)
+# ---------------------------------------------------------------------------
+
+@pytest_asyncio.fixture(scope="function")
+async def db_engine():
+    engine = create_async_engine(
+        "sqlite+aiosqlite:///:memory:",
+        echo=False,
+        connect_args={"check_same_thread": False},
+    )
+    async with engine.begin() as conn:
+        await conn.run_sync(Base.metadata.create_all)
+    yield engine
+    async with engine.begin() as conn:
+        await conn.run_sync(Base.metadata.drop_all)
+    await engine.dispose()
+
+
+@pytest_asyncio.fixture(scope="function")
+async def db_session(db_engine):
+    session_factory = async_sessionmaker(
+        db_engine, class_=AsyncSession, expire_on_commit=False
+    )
+    async with session_factory() as session:
+        yield session
+        await session.rollback()
+
+
+# ---------------------------------------------------------------------------
+# FastAPI test client
+# ---------------------------------------------------------------------------
+
+@pytest_asyncio.fixture(scope="function")
+async def client(db_engine):
+    # Reset the process-global TTL cache so results from a previous test
+    # (with a different in-memory DB) cannot leak into this one.
+    from app.utils.cache import app_cache
+    app_cache.clear()
+    session_factory = async_sessionmaker(
+        db_engine, class_=AsyncSession, expire_on_commit=False
+    )
+
+    async def _override_get_db():
+        async with session_factory() as session:
+            try:
+                yield session
+                await session.commit()
+            except Exception:
+                await session.rollback()
+                raise
+
+    app.dependency_overrides[get_db] = _override_get_db
+
+    transport = ASGITransport(app=app)
+    async with AsyncClient(transport=transport, base_url="http://testserver") as ac:
+        yield ac
+
     app.dependency_overrides.clear()
 
-@pytest.fixture
-def test_tenant(db_session) -> Tenant:
-    """Create a test tenant."""
-    tenant_repo = TenantRepository(db_session)
-    
-    tenant_data = {
-        "name": "Test University",
-        "domains": ["test.edu", "university.test"],
-        "access_code_hash": SecurityUtils.hash_access_code("TEST123"),
-        "is_active": True
-    }
-    
-    tenant = tenant_repo.create(tenant_data)
-    db_session.commit()
-    
+
+# ---------------------------------------------------------------------------
+# Tenant fixture
+# ---------------------------------------------------------------------------
+
+@pytest_asyncio.fixture
+async def tenant(db_session):
+    auth = AuthManager()
+    tenant = Tenant(
+        name="Test University",
+        slug="test-university",
+        access_code_hash=auth.hash_password("TESTCODE123"),
+        is_active=True,
+        allowed_domains=["test.edu"],
+    )
+    db_session.add(tenant)
+    await db_session.commit()
+    await db_session.refresh(tenant)
     return tenant
 
-@pytest.fixture
-def test_user(db_session, test_tenant) -> User:
-    """Create a test user."""
-    user_repo = UserRepository(db_session)
-    
-    user_data = {
-        "name": "Test User",
-        "email": "test@test.edu",
-        "password_hash": SecurityUtils.hash_password("testpassword123"),
-        "role": "student",
-        "tenant_id": test_tenant.id,
-        "domain_verified": True,
-        "is_active": True
-    }
-    
-    user = user_repo.create(user_data)
-    db_session.commit()
-    
+
+# ---------------------------------------------------------------------------
+# User fixtures
+# ---------------------------------------------------------------------------
+
+@pytest_asyncio.fixture
+async def test_user(db_session, tenant):
+    auth = AuthManager()
+    user = User(
+        email="testuser@test.edu",
+        username="testuser",
+        full_name="Test User",
+        password_hash=auth.hash_password("SecurePass123!"),
+        role=UserRole.STUDENT,
+        status=UserStatus.ACTIVE,
+        tenant_id=tenant.id,
+        is_email_verified=True,
+        domain_verified=False,
+        failed_login_attempts=0,
+        preferences={},
+    )
+    db_session.add(user)
+    await db_session.commit()
+    await db_session.refresh(user)
     return user
 
-@pytest.fixture
-def test_admin_user(db_session, test_tenant) -> User:
-    """Create a test admin user."""
-    user_repo = UserRepository(db_session)
-    
-    user_data = {
-        "name": "Admin User",
-        "email": "admin@test.edu",
-        "password_hash": SecurityUtils.hash_password("adminpassword123"),
-        "role": "admin",
-        "tenant_id": test_tenant.id,
-        "domain_verified": True,
-        "is_active": True
-    }
-    
-    user = user_repo.create(user_data)
-    db_session.commit()
-    
+
+@pytest_asyncio.fixture
+async def admin_user(db_session, tenant):
+    auth = AuthManager()
+    user = User(
+        email="admin@test.edu",
+        username="admin",
+        full_name="Admin User",
+        password_hash=auth.hash_password("AdminPass123!"),
+        role=UserRole.ADMIN,
+        status=UserStatus.ACTIVE,
+        tenant_id=tenant.id,
+        is_email_verified=True,
+        domain_verified=True,
+        failed_login_attempts=0,
+        preferences={},
+    )
+    db_session.add(user)
+    await db_session.commit()
+    await db_session.refresh(user)
     return user
 
-@pytest.fixture
-def auth_service(db_session) -> AuthService:
-    """Create an AuthService instance for testing."""
-    return AuthService(db_session)
 
-@pytest.fixture
-def auth_headers(test_user) -> Dict[str, str]:
-    """Create authentication headers for test user."""
-    access_token = SecurityUtils.generate_access_token({
-        "sub": str(test_user.id),
-        "email": test_user.email,
-        "role": test_user.role,
-        "tenant_id": test_user.tenant_id
-    })
-    
+# ---------------------------------------------------------------------------
+# Auth token helper
+# ---------------------------------------------------------------------------
+
+def make_token(user) -> str:
+    """Generate a valid JWT access token for the given user."""
+    auth = AuthManager()
+    return auth.create_access_token(
+        subject=user.email,
+        user_id=user.id,
+        role=user.role.value if hasattr(user.role, "value") else user.role,
+        tenant_id=user.tenant_id,
+    )
+
+
+def auth_headers(access_token: str) -> dict:
     return {"Authorization": f"Bearer {access_token}"}
 
-@pytest.fixture
-def admin_auth_headers(test_admin_user) -> Dict[str, str]:
-    """Create authentication headers for admin user."""
-    access_token = SecurityUtils.generate_access_token({
-        "sub": str(test_admin_user.id),
-        "email": test_admin_user.email,
-        "role": test_admin_user.role,
-        "tenant_id": test_admin_user.tenant_id
-    })
-    
-    return {"Authorization": f"Bearer {access_token}"}
 
-@pytest.fixture
-def test_paper_data() -> Dict[str, Any]:
-    """Create test paper data."""
-    return {
-        "title": "Test Paper - Mathematics",
-        "subject": "Mathematics",
-        "university": "Test University",
-        "stream": "Engineering",
-        "year": 2023,
-        "semester_year": "Semester 1",
-        "exam_type": "Final",
-        "tags": ["calculus", "algebra", "geometry"]
-    }
+@pytest_asyncio.fixture
+async def authed_client(client, test_user):
+    """Client with a pre-authenticated student user."""
+    token = make_token(test_user)
+    client.headers.update(auth_headers(token))
+    return client
 
-@pytest.fixture
-def test_pdf_file():
-    """Create a temporary PDF file for testing."""
-    # Create a simple PDF content (mock)
-    pdf_content = b"%PDF-1.4\n1 0 obj\n<<\n/Type /Catalog\n/Pages 2 0 R\n>>\nendobj\n2 0 obj\n<<\n/Type /Pages\n/Kids [3 0 R]\n/Count 1\n>>\nendobj\n3 0 obj\n<<\n/Type /Page\n/Parent 2 0 R\n/MediaBox [0 0 612 792]\n>>\nendobj\nxref\n0 4\n0000000000 65535 f \n0000000009 00000 n \n0000000074 00000 n \n0000000120 00000 n \ntrailer\n<<\n/Size 4\n/Root 1 0 R\n>>\nstartxref\n179\n%%EOF"
-    
-    # Create temporary file
-    with tempfile.NamedTemporaryFile(suffix=".pdf", delete=False) as tmp_file:
-        tmp_file.write(pdf_content)
-        tmp_file.flush()
-        
-        yield tmp_file.name
-    
-    # Clean up
-    try:
-        os.unlink(tmp_file.name)
-    except OSError:
-        pass
 
-@pytest.fixture
-def mock_redis():
-    """Mock Redis client for testing."""
-    class MockRedis:
-        def __init__(self):
-            self.data = {}
-            self.expiry = {}
-        
-        def get(self, key):
-            return self.data.get(key)
-        
-        def set(self, key, value):
-            self.data[key] = value
-            return True
-        
-        def setex(self, key, ttl, value):
-            self.data[key] = value
-            self.expiry[key] = ttl
-            return True
-        
-        def delete(self, *keys):
-            count = 0
-            for key in keys:
-                if key in self.data:
-                    del self.data[key]
-                    count += 1
-                if key in self.expiry:
-                    del self.expiry[key]
-            return count
-        
-        def exists(self, key):
-            return key in self.data
-        
-        def keys(self, pattern):
-            # Simple pattern matching for testing
-            if pattern.endswith('*'):
-                prefix = pattern[:-1]
-                return [k for k in self.data.keys() if k.startswith(prefix)]
-            return [k for k in self.data.keys() if k == pattern]
-        
-        def incr(self, key, amount=1):
-            current = int(self.data.get(key, 0))
-            new_value = current + amount
-            self.data[key] = str(new_value)
-            return new_value
-        
-        def expire(self, key, ttl):
-            if key in self.data:
-                self.expiry[key] = ttl
-                return True
-            return False
-        
-        def ttl(self, key):
-            return self.expiry.get(key, -1)
-        
-        def flushdb(self):
-            self.data.clear()
-            self.expiry.clear()
-        
-        def ping(self):
-            return True
-    
-    return MockRedis()
+@pytest_asyncio.fixture
+async def admin_client(client, admin_user):
+    """Client with a pre-authenticated admin user."""
+    token = make_token(admin_user)
+    client.headers.update(auth_headers(token))
+    return client
 
-@pytest.fixture
-def test_chat_session_data() -> Dict[str, Any]:
-    """Create test chat session data."""
-    return {
-        "session_uuid": "test-session-123",
-        "metadata": {
-            "user_agent": "Test Agent",
-            "ip_address": "127.0.0.1"
-        }
-    }
 
-@pytest.fixture
-def test_feature_data() -> Dict[str, Any]:
-    """Create test feature data."""
-    return {
-        "title": "Test Feature",
-        "description": "This is a test feature for the application",
-        "icon_url": "https://example.com/icon.svg",
-        "display_order": 1,
-        "is_active": True
-    }
+# ---------------------------------------------------------------------------
+# Paper fixture (in DB, no file on disk)
+# ---------------------------------------------------------------------------
 
-# Test utilities
-class TestUtils:
-    """Utility functions for testing."""
-    
-    @staticmethod
-    def create_test_file(content: bytes, suffix: str = ".txt") -> str:
-        """Create a temporary test file.
-        
-        Args:
-            content: File content
-            suffix: File suffix
-            
-        Returns:
-            Path to temporary file
-        """
-        with tempfile.NamedTemporaryFile(suffix=suffix, delete=False) as tmp_file:
-            tmp_file.write(content)
-            tmp_file.flush()
-            return tmp_file.name
-    
-    @staticmethod
-    def cleanup_file(file_path: str) -> None:
-        """Clean up temporary file.
-        
-        Args:
-            file_path: Path to file to delete
-        """
-        try:
-            os.unlink(file_path)
-        except OSError:
-            pass
-    
-    @staticmethod
-    def assert_response_success(response, expected_status: int = 200):
-        """Assert that response is successful.
-        
-        Args:
-            response: HTTP response
-            expected_status: Expected status code
-        """
-        assert response.status_code == expected_status, f"Expected {expected_status}, got {response.status_code}: {response.text}"
-    
-    @staticmethod
-    def assert_response_error(response, expected_status: int = 400):
-        """Assert that response is an error.
-        
-        Args:
-            response: HTTP response
-            expected_status: Expected status code
-        """
-        assert response.status_code == expected_status, f"Expected {expected_status}, got {response.status_code}: {response.text}"
-        
-        # Check error format
-        data = response.json()
-        assert "error" in data or "detail" in data
-
-@pytest.fixture
-def test_utils() -> TestUtils:
-    """Provide test utilities."""
-    return TestUtils()
-
-# Pytest configuration
-pytest_plugins = []
-
-# Test markers
-pytestmark = [
-    pytest.mark.asyncio,
-]
-
-# Test configuration
-def pytest_configure(config):
-    """Configure pytest."""
-    config.addinivalue_line(
-        "markers", "slow: marks tests as slow (deselect with '-m "not slow"')"
+@pytest_asyncio.fixture
+async def sample_paper(db_session, test_user, tenant):
+    paper = Paper(
+        title="DBMS Final Exam 2024",
+        subject="Database Management Systems",
+        university="Test University",
+        stream="bca",
+        specialization="General",
+        year=2024,
+        semester="6",
+        exam_type=ExamType.FINAL,
+        status=PaperStatus.APPROVED,
+        processing_status=ProcessingStatus.COMPLETED,
+        tenant_id=tenant.id,
+        uploader_id=test_user.id,
+        file_url="/files/papers/1/test.pdf",
+        file_name="test.pdf",
+        file_size=1024,
+        tags=["dbms", "database"],
+        view_count=10,
+        download_count=5,
     )
-    config.addinivalue_line(
-        "markers", "integration: marks tests as integration tests"
+    db_session.add(paper)
+    await db_session.commit()
+    await db_session.refresh(paper)
+    return paper
+
+
+@pytest_asyncio.fixture
+async def sample_question(db_session, sample_paper):
+    q = Question(
+        paper_id=sample_paper.id,
+        question_number="Q1",
+        question_text="Explain normalization in DBMS.",
+        original_question_text="Explain normalization in DBMS.",
+        normalized_question_text="explain normalization in dbms",
+        section="Part A",
+        marks=10,
+        question_type="descriptive",
+        subject="Database Management Systems",
     )
-    config.addinivalue_line(
-        "markers", "unit: marks tests as unit tests"
+    db_session.add(q)
+    await db_session.commit()
+    await db_session.refresh(q)
+    return q
+
+
+@pytest_asyncio.fixture
+async def sample_question_group(db_session, sample_question):
+    g = QuestionGroup(
+        representative_text="Explain normalization in DBMS.",
+        normalized_text="explain normalization in dbms",
+        subject="Database Management Systems",
+        frequency=3,
+        similarity_method=SimilarityMethod.EXACT,
+        confidence=1.0,
+    )
+    db_session.add(g)
+    await db_session.commit()
+    await db_session.refresh(g)
+
+    m = QuestionGroupMember(
+        question_id=sample_question.id,
+        group_id=g.id,
+        similarity_score=1.0,
+        is_exact_match=True,
+    )
+    db_session.add(m)
+    await db_session.commit()
+    return g
+
+
+# ---------------------------------------------------------------------------
+# Helper: create a tiny in-memory PDF
+# ---------------------------------------------------------------------------
+
+def make_pdf_bytes(title: str = "Test PDF") -> bytes:
+    """Return a minimal valid PDF as bytes."""
+    return (
+        b"%PDF-1.4\n"
+        b"1 0 obj<</Type/Catalog/Pages 2 0 R>>endobj\n"
+        b"2 0 obj<</Type/Pages/Kids[3 0 R]/Count 1>>endobj\n"
+        b"3 0 obj<</Type/Page/MediaBox[0 0 612 792]/Parent 2 0 R"
+        b"/Resources<</Font<</F1 4 0 R>>>>>>endobj\n"
+        b"4 0 obj<</Type/Font/Subtype/Type1/BaseFont/Helvetica>>endobj\n"
+        b"xref\n0 5\n"
+        b"0000000000 65535 f \n"
+        b"0000000009 00000 n \n"
+        b"0000000058 00000 n \n"
+        b"0000000115 00000 n \n"
+        b"0000000266 00000 n \n"
+        b"trailer<</Size 5/Root 1 0 R>>\n"
+        b"startxref\n345\n%%EOF\n"
     )

@@ -4,6 +4,7 @@ Handles feature flags, announcements, and platform capabilities.
 """
 
 from datetime import datetime
+from enum import Enum
 from typing import Optional, Dict, Any
 
 from sqlalchemy import (
@@ -12,6 +13,11 @@ from sqlalchemy import (
 from sqlalchemy.sql import func
 
 from app.core.database import Base
+
+
+class FeatureType(str, Enum):
+    FEATURE = "feature"
+    ANNOUNCEMENT = "announcement"
 
 
 class Feature(Base):

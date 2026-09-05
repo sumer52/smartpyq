@@ -20,7 +20,7 @@ from app.core.exceptions import ValidationError, NotFoundError
 class PaperRepository(BaseRepository[Paper]):
     """Repository for paper operations."""
     
-    def __init__(self, db: AsyncSession):
+    def __init__(self, db=None):
         super().__init__(db, Paper)
     
     async def get_by_tenant(
@@ -92,108 +92,6 @@ class PaperRepository(BaseRepository[Paper]):
         
         result = await self.db.execute(query)
         return result.scalars().all()
-    
-    async def search_papers(
-        self,
-        search_term: Optional[str] = None,
-        tenant_id: Optional[int] = None,
-        subject: Optional[str] = None,
-        university: Optional[str] = None,
-        stream: Optional[str] = None,
-        year: Optional[int] = None,
-        semester_year: Optional[str] = None,
-        exam_type: Optional[ExamType] = None,
-        tags: Optional[List[str]] = None,
-        status: Optional[PaperStatus] = None,
-        skip: int = 0,
-        limit: int = 100,
-        order_by: str = 'created_at',
-        order_desc: bool = True
-    ) -> List[Paper]:
-        """Search papers with multiple filters.
-        
-        Args:
-            search_term: Text search in title and description
-            tenant_id: Filter by tenant ID
-            subject: Filter by subject
-            university: Filter by university
-            stream: Filter by stream
-            year: Filter by year
-            semester_year: Filter by semester/year
-            exam_type: Filter by exam type
-            tags: Filter by tags (any of the provided tags)
-            status: Filter by status
-            skip: Number of records to skip
-            limit: Maximum number of records
-            order_by: Field to order by
-            order_desc: Whether to order in descending order
-            
-        Returns:
-            List of matching papers
-        """
-        query = select(Paper)
-        conditions = []
-        
-        # Text search
-        if search_term:
-            search_pattern = f"%{search_term}%"
-            conditions.append(
-                or_(
-                    Paper.title.ilike(search_pattern),
-                    Paper.description.ilike(search_pattern)
-                )
-            )
-        
-        # Exact filters
-        if tenant_id:
-            conditions.append(Paper.tenant_id == tenant_id)
-        
-        if subject:
-            conditions.append(Paper.subject.ilike(f"%{subject}%"))
-        
-        if university:
-            conditions.append(Paper.university.ilike(f"%{university}%"))
-        
-        if stream:
-            conditions.append(Paper.stream.ilike(f"%{stream}%"))
-        
-        if year:
-            conditions.append(Paper.year == year)
-        
-        if semester_year:
-            conditions.append(Paper.semester_year == semester_year)
-        
-        if exam_type:
-            conditions.append(Paper.exam_type == exam_type)
-        
-        if status:
-            conditions.append(Paper.status == status)
-        
-        # Tags filter (any of the provided tags)
-        if tags:
-            tag_conditions = []
-            for tag in tags:
-                tag_conditions.append(Paper.tags.op('@>')([tag]))
-            conditions.append(or_(*tag_conditions))
-        
-        # Apply conditions
-        if conditions:
-            query = query.where(and_(*conditions))
-        
-        # Add ordering
-        if hasattr(Paper, order_by):
-            order_field = getattr(Paper, order_by)
-            if order_desc:
-                query = query.order_by(order_field.desc())
-            else:
-                query = query.order_by(order_field)
-        
-        # Add pagination
-        query = query.offset(skip).limit(limit)
-        
-        result = await self.db.execute(query)
-        return result.scalars().all()
-    
     async def get_papers_by_uploader(
         self,
         uploader_id: int,
@@ -674,3 +572,170 @@ class PaperRepository(BaseRepository[Paper]):
         
         result = await self.db.execute(query)
         return result.scalars().all()
+
+    async def check_metadata_duplicate(
+        self,
+        stream: str,
+        specialization: str,
+        subject: str,
+        semester: str,
+        exam_type: str,
+        year: int,
+        tenant_id: int
+    ) -> List[Paper]:
+        """Check for duplicate papers by metadata."""
+        conditions = [
+            Paper.subject.ilike(subject),
+            Paper.year == year,
+            Paper.tenant_id == tenant_id,
+            Paper.status != PaperStatus.REJECTED
+        ]
+        
+        if stream:
+            conditions.append(Paper.stream.ilike(stream))
+        if specialization:
+            conditions.append(Paper.specialization.ilike(specialization))
+        if semester:
+            conditions.append(Paper.semester.ilike(semester))
+        if exam_type:
+            conditions.append(Paper.exam_type == exam_type)
+        
+        query = select(Paper).where(and_(*conditions)).limit(1)
+        result = await self.db.execute(query)
+        return result.scalars().all()
+
+    async def get_papers_with_filters(
+        self,
+        filters: Dict[str, Any],
+        page: int = 1,
+        limit: int = 20,
+        sort_by: str = 'created_at',
+        sort_order: str = 'desc'
+    ) -> Tuple[List[Paper], int]:
+        """Get papers with filters and pagination."""
+        query = select(Paper)
+        count_query = select(func.count(Paper.id))
+        
+        conditions = []
+        for key, value in filters.items():
+            if hasattr(Paper, key) and value is not None:
+                if key in ('status', 'exam_type'):
+                    conditions.append(getattr(Paper, key) == value)
+                else:
+                    conditions.append(getattr(Paper, key).ilike(f'%{value}%'))
+        
+        if conditions:
+            query = query.where(and_(*conditions))
+            count_query = count_query.where(and_(*conditions))
+        
+        total_result = await self.db.execute(count_query)
+        total = total_result.scalar()
+        
+        if hasattr(Paper, sort_by):
+            order_field = getattr(Paper, sort_by)
+            query = query.order_by(order_field.desc() if sort_order == 'desc' else order_field)
+        
+        offset = (page - 1) * limit
+        query = query.offset(offset).limit(limit)
+        
+        result = await self.db.execute(query)
+        return result.scalars().all(), total
+
+    async def search_papers(
+        self,
+        query: str = None,
+        filters: Dict[str, Any] = None,
+        page: int = 1,
+        limit: int = 20,
+        sort_by: str = 'created_at',
+        sort_order: str = 'desc',
+        **kwargs
+    ) -> Tuple[List[Paper], int]:
+        """Search papers with text query and filters."""
+        stmt = select(Paper)
+        count_stmt = select(func.count(Paper.id))
+        
+        conditions = []
+        
+        if query:
+            search_pattern = f"%{query}%"
+            conditions.append(
+                or_(
+                    Paper.title.ilike(search_pattern),
+                    Paper.subject.ilike(search_pattern)
+                )
+            )
+        
+        if filters:
+            for key, value in filters.items():
+                if hasattr(Paper, key) and value is not None:
+                    if key in ('status', 'exam_type'):
+                        conditions.append(getattr(Paper, key) == value)
+                    else:
+                        conditions.append(getattr(Paper, key).ilike(f'%{value}%'))
+        
+        if conditions:
+            stmt = stmt.where(and_(*conditions))
+            count_stmt = count_stmt.where(and_(*conditions))
+        
+        total_result = await self.db.execute(count_stmt)
+        total = total_result.scalar()
+        
+        if hasattr(Paper, sort_by):
+            order_field = getattr(Paper, sort_by)
+            stmt = stmt.order_by(order_field.desc() if sort_order == 'desc' else order_field)
+        
+        offset = (page - 1) * limit
+        stmt = stmt.offset(offset).limit(limit)
+        
+        result = await self.db.execute(stmt)
+        return result.scalars().all(), total
+
+    async def create_version(self, **kwargs) -> PaperVersion:
+        """Create a paper version record."""
+        version = PaperVersion(**kwargs)
+        self.db.add(version)
+        await self.db.flush()
+        await self.db.refresh(version)
+        return version
+
+    async def get_version_by_checksum(self, checksum: str) -> Optional[PaperVersion]:
+        """Get paper version by checksum."""
+        query = select(PaperVersion).where(PaperVersion.checksum == checksum).limit(1)
+        result = await self.db.execute(query)
+        return result.scalar_one_or_none()
+
+    async def get_paper_stats(self, tenant_id: int = None) -> Dict[str, Any]:
+        """Get paper statistics."""
+        base_conditions = [Paper.status == PaperStatus.APPROVED]
+        if tenant_id:
+            base_conditions.append(Paper.tenant_id == tenant_id)
+        
+        total_q = select(func.count(Paper.id))
+        approved_q = select(func.count(Paper.id)).where(Paper.status == PaperStatus.APPROVED)
+        pending_q = select(func.count(Paper.id)).where(Paper.status == PaperStatus.PENDING)
+        downloads_q = select(func.coalesce(func.sum(Paper.download_count), 0))
+        
+        if tenant_id:
+            total_q = total_q.where(Paper.tenant_id == tenant_id)
+            approved_q = approved_q.where(Paper.tenant_id == tenant_id)
+            pending_q = pending_q.where(Paper.tenant_id == tenant_id)
+            downloads_q = downloads_q.where(Paper.tenant_id == tenant_id)
+        
+        from datetime import datetime, timedelta
+        week_ago = datetime.utcnow() - timedelta(days=7)
+        recent_q = select(func.count(Paper.id)).where(Paper.created_at >= week_ago)
+        if tenant_id:
+            recent_q = recent_q.where(Paper.tenant_id == tenant_id)
+        
+        total = (await self.db.execute(total_q)).scalar()
+        approved = (await self.db.execute(approved_q)).scalar()
+        pending = (await self.db.execute(pending_q)).scalar()
+        downloads = (await self.db.execute(downloads_q)).scalar()
+        recent = (await self.db.execute(recent_q)).scalar()
+        
+        return {
+            'total': total, 'approved': approved, 'pending': pending,
+            'rejected': 0, 'total_downloads': downloads, 'recent_uploads': recent
+        }
+

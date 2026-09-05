@@ -50,16 +50,21 @@ class EmailService:
     
     def _create_default_templates(self, template_dir: Path) -> None:
         """Create default email templates if they don't exist."""
-        templates = {
-            "otp_verification.html": self._get_otp_template(),
-            "welcome.html": self._get_welcome_template(),
-            "newsletter.html": self._get_newsletter_template(),
-            "password_reset.html": self._get_password_reset_template(),
-            "paper_approved.html": self._get_paper_approved_template(),
-            "paper_rejected.html": self._get_paper_rejected_template(),
+        template_methods = {
+            "otp_verification.html": "_get_otp_template",
+            "welcome.html": "_get_welcome_template",
+            "newsletter.html": "_get_newsletter_template",
+            "password_reset.html": "_get_password_reset_template",
+            "paper_approved.html": "_get_paper_approved_template",
+            "paper_rejected.html": "_get_paper_rejected_template",
         }
         
-        for filename, content in templates.items():
+        for filename, method_name in template_methods.items():
+            method = getattr(self, method_name, None)
+            if method is None:
+                logger.warning("Skipping unavailable email template: %s", filename)
+                continue
+            content = method()
             template_path = template_dir / filename
             if not template_path.exists():
                 template_path.write_text(content, encoding='utf-8')
@@ -129,7 +134,17 @@ class EmailService:
             raise
     
     def send_otp_email(self, to_email: str, otp: str, user_name: str = "") -> Dict[str, Any]:
-        """Send OTP verification email."""
+        """Send OTP verification email.
+        
+        In dev mode (DEV_EMAIL_LOG_OTP=True), logs OTP to console
+        when SMTP is not configured, so the flow still works.
+        """
+        # Dev fallback: log OTP to console if SMTP isn't configured
+        if settings.DEV_EMAIL_LOG_OTP and (not self.smtp_username or self.smtp_username in ('your_email@gmail.com', None)):
+            logger.info(f"DEV MODE: OTP for {to_email} -> {otp}")
+            print(f"\n{'='*60}\nDEV MODE: OTP for {to_email}\nOTP Code: {otp}\n{'='*60}\n")
+            return {"status": "dev_logged", "to_email": to_email, "otp": otp}
+        
         context = {
             "otp": otp,
             "user_name": user_name or to_email.split('@')[0],

@@ -4,7 +4,6 @@ Handles chat sessions, message processing, AI integration with Gemini/OpenAI,
 streaming responses, and conversation context management.
 """
 
-import json
 import uuid
 from typing import Optional, List, Dict, Any, AsyncGenerator, Tuple
 from datetime import datetime, timedelta
@@ -16,7 +15,8 @@ from app.core.exceptions import (
     ValidationError,
     NotFoundError,
     RateLimitError,
-    ServiceError
+    ServiceError,
+    PermissionError
 )
 from app.models.chat import ChatSession, ChatMessage, MessageRole
 from app.models.user import User, UserRole
@@ -30,10 +30,10 @@ from app.schemas.chat import (
     ChatMessageResponse,
     ChatHistoryResponse
 )
-from app.utils.ai import AIService, AIProvider
-from app.utils.cache import CacheService
+from app.utils.ai import AIService
+
 from app.utils.content_filter import ContentFilter, filter_user_content, moderate_ai_content
-from app.utils.ai import AIService, get_ai_response, stream_ai_response
+from app.services.cache_service import CacheService
 
 
 class ChatService:
@@ -41,15 +41,15 @@ class ChatService:
     
     def __init__(
         self,
-        db: AsyncSession,
+        db: Optional[AsyncSession] = None,
         ai_service: Optional[AIService] = None,
         cache_service: Optional[CacheService] = None,
         content_filter: Optional[ContentFilter] = None
     ):
         self.db = db
-        self.chat_repo = ChatRepository(db)
-        self.message_repo = ChatMessageRepository(db)
-        self.audit_repo = AuditLogRepository(db)
+        self.chat_repo = ChatRepository(db) if db else None
+        self.message_repo = ChatMessageRepository(db) if db else None
+        self.audit_repo = AuditLogRepository(db) if db else None
         self.ai_service = ai_service or AIService()
         self.cache_service = cache_service
         self.content_filter = content_filter

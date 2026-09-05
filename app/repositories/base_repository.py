@@ -21,7 +21,7 @@ ModelType = TypeVar("ModelType", bound=Base)
 class BaseRepository(Generic[ModelType], ABC):
     """Base repository class with common database operations."""
     
-    def __init__(self, db: AsyncSession, model: Type[ModelType]):
+    def __init__(self, db, model: Type[ModelType]):
         self.db = db
         self.model = model
     
@@ -210,15 +210,13 @@ class BaseRepository(Generic[ModelType], ABC):
             update(self.model)
             .where(self.model.id == id)
             .values(**update_data)
-            .returning(self.model)
         )
         
-        result = await self.db.execute(query)
-        updated_record = result.scalar_one_or_none()
+        await self.db.execute(query)
+        await self.db.flush()
         
-        if updated_record:
-            await self.db.refresh(updated_record)
-        
+        # Fetch the updated record
+        updated_record = await self.get_by_id(id)
         return updated_record
     
     async def delete(self, id: int) -> bool:

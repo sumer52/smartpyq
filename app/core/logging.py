@@ -92,7 +92,7 @@ def setup_logging() -> None:
     logging.config.dictConfig(config)
     
     # Setup Sentry integration if configured
-    if settings.SENTRY_DSN:
+    if settings.SENTRY_DSN and settings.SENTRY_DSN.startswith("https://"):
         try:
             import sentry_sdk
             from sentry_sdk.integrations.logging import LoggingIntegration
@@ -110,7 +110,7 @@ def setup_logging() -> None:
                 integrations=[
                     sentry_logging,
                     SqlalchemyIntegration(),
-                    FastApiIntegration(auto_enabling=True)
+                    FastApiIntegration()
                 ],
                 traces_sample_rate=0.1 if settings.ENV == "production" else 1.0,
                 send_default_pii=False
@@ -121,49 +121,3 @@ def setup_logging() -> None:
             logging.getLogger("app").warning("Sentry SDK not installed, skipping integration")
         except Exception as e:
             logging.getLogger("app").error(f"Failed to initialize Sentry: {e}")
-
-
-class StructuredLogger:
-    """Structured logger with context support."""
-    
-    def __init__(self, name: str):
-        self.logger = logging.getLogger(name)
-        self.context = {}
-    
-    def set_context(self, **kwargs):
-        """Set logging context."""
-        self.context.update(kwargs)
-    
-    def clear_context(self):
-        """Clear logging context."""
-        self.context.clear()
-    
-    def _log_with_context(self, level: str, message: str, **kwargs):
-        """Log message with context."""
-        extra = {**self.context, **kwargs}
-        getattr(self.logger, level)(message, extra=extra)
-    
-    def debug(self, message: str, **kwargs):
-        """Log debug message."""
-        self._log_with_context("debug", message, **kwargs)
-    
-    def info(self, message: str, **kwargs):
-        """Log info message."""
-        self._log_with_context("info", message, **kwargs)
-    
-    def warning(self, message: str, **kwargs):
-        """Log warning message."""
-        self._log_with_context("warning", message, **kwargs)
-    
-    def error(self, message: str, **kwargs):
-        """Log error message."""
-        self._log_with_context("error", message, **kwargs)
-    
-    def critical(self, message: str, **kwargs):
-        """Log critical message."""
-        self._log_with_context("critical", message, **kwargs)
-
-
-def get_logger(name: str) -> StructuredLogger:
-    """Get a structured logger instance."""
-    return StructuredLogger(name)

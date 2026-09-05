@@ -1,397 +1,171 @@
 import React, { useState } from 'react';
-import { motion } from 'framer-motion';
+import { motion, AnimatePresence } from 'framer-motion';
+import { useAuth } from '../contexts/AuthContext';
 import UploadStepper from '../components/UploadStepper';
-import { apiClient } from '../lib/api';
+import {
+  ArrowUpTrayIcon, SparklesIcon, ShieldCheckIcon, StarIcon,
+  QuestionMarkCircleIcon, ChevronDownIcon, ChevronUpIcon
+} from '@heroicons/react/24/outline';
 
+const fadeUp = {
+  hidden: { opacity: 0, y: 30 },
+  visible: { opacity: 1, y: 0, transition: { duration: 0.6, ease: [0.22, 1, 0.36, 1] } }
+};
+const stagger = {
+  hidden: { opacity: 0 },
+  visible: { opacity: 1, transition: { staggerChildren: 0.08 } }
+};
 const UploadPage = () => {
-  const [uploadStats, setUploadStats] = useState({
-    totalUploads: 1250,
-    pendingReview: 45,
-    approved: 1180,
-    rejected: 25
-  });
+  const { isAuthenticated } = useAuth();
+  const [uploadSuccess, setUploadSuccess] = useState(false);
+  const [expandedFaq, setExpandedFaq] = useState(null);
 
-  const [recentUploads, setRecentUploads] = useState([
-    {
-      id: 1,
-      title: 'Advanced Mathematics - Final Exam 2023',
-      status: 'approved',
-      uploadedAt: '2024-01-15T10:30:00Z',
-      downloads: 234
-    },
-    {
-      id: 2,
-      title: 'Organic Chemistry - Mid-term 2023',
-      status: 'pending',
-      uploadedAt: '2024-01-14T15:20:00Z',
-      downloads: 0
-    },
-    {
-      id: 3,
-      title: 'Computer Networks - Assignment Questions',
-      status: 'approved',
-      uploadedAt: '2024-01-12T09:45:00Z',
-      downloads: 156
-    }
-  ]);
-
-  const handleUploadComplete = async (uploadData) => {
-    try {
-      // TODO: Replace with actual API call
-      console.log('Upload completed:', uploadData);
-      
-      // Mock API response
-      const response = await new Promise(resolve => {
-        setTimeout(() => {
-          resolve({
-            success: true,
-            paperId: Date.now(),
-            message: 'Paper uploaded successfully and is under review'
-          });
-        }, 1000);
-      });
-
-      // Update recent uploads
-      const newUpload = {
-        id: response.paperId,
-        title: uploadData.title,
-        status: 'pending',
-        uploadedAt: new Date().toISOString(),
-        downloads: 0
-      };
-
-      setRecentUploads(prev => [newUpload, ...prev.slice(0, 4)]);
-      setUploadStats(prev => ({
-        ...prev,
-        totalUploads: prev.totalUploads + 1,
-        pendingReview: prev.pendingReview + 1
-      }));
-
-      return response;
-    } catch (error) {
-      console.error('Upload failed:', error);
-      throw error;
-    }
+  const handleUploadComplete = () => {
+    setUploadSuccess(true);
+    setTimeout(() => setUploadSuccess(false), 4000);
   };
 
-  const getStatusColor = (status) => {
-    switch (status) {
-      case 'approved':
-        return 'text-green-600 bg-green-100';
-      case 'pending':
-        return 'text-yellow-600 bg-yellow-100';
-      case 'rejected':
-        return 'text-red-600 bg-red-100';
-      default:
-        return 'text-gray-600 bg-gray-100';
-    }
-  };
-
-  const getStatusIcon = (status) => {
-    switch (status) {
-      case 'approved':
-        return '✅';
-      case 'pending':
-        return '⏳';
-      case 'rejected':
-        return '❌';
-      default:
-        return '📄';
-    }
-  };
-
-  const containerVariants = {
-    hidden: { opacity: 0 },
-    visible: {
-      opacity: 1,
-      transition: {
-        staggerChildren: 0.1
-      }
-    }
-  };
-
-  const itemVariants = {
-    hidden: { opacity: 0, y: 20 },
-    visible: { 
-      opacity: 1, 
-      y: 0,
-      transition: {
-        duration: 0.6,
-        ease: "easeOut"
-      }
-    }
-  };
-
+  const faqs = [
+    { q: 'What file formats are accepted?', a: 'We accept PDF, JPG, JPEG, PNG, and WEBP files. Clear, readable documents work best. For images, make sure the text is legible and the photo is well-lit.' },
+    { q: 'What happens after I upload?', a: 'Our system automatically analyzes your uploaded file and extracts key information like subject, semester, and questions. You\'ll see a review screen where you can verify and correct any auto-detected details before confirming the upload.' },
+    { q: 'Can I upload answer keys?', a: 'No, we only accept original question papers. Answer keys, solutions, and study materials are not accepted at this time.' },
+    { q: 'Is there a file size limit?', a: 'You can upload files up to 50MB in size. Most question papers are well under this limit.' },
+    { q: 'Do I need an account to upload?', a: 'Yes, you need to be logged in. This helps us track uploads and ensure the quality of papers in the database.' }
+  ];
   return (
-    <motion.div
-      className="min-h-screen bg-gray-50"
-      variants={containerVariants}
-      initial="hidden"
-      animate="visible"
-    >
-      {/* Header */}
-      <div className="bg-white border-b border-gray-200">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-          <motion.div variants={itemVariants}>
-            <h1 className="text-3xl font-bold text-gray-900 mb-2">
-              <span role="img" aria-label="upload">📤</span> Upload Question Paper
-            </h1>
-            <p className="text-lg text-gray-600 max-w-2xl">
-              Share your question papers with fellow students and help build our comprehensive database
-            </p>
+    <motion.div className="min-h-screen bg-white/[0.02]" variants={stagger} initial="hidden" animate="visible">
+      <motion.div variants={fadeUp} className="relative overflow-hidden">
+        <div className="absolute inset-0 bg-gradient-to-b from-purple-900/10 via-transparent to-transparent" />
+        <div className="relative max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 pt-12 pb-10 text-center">
+          <motion.div className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full bg-purple-500/10 border border-purple-500/20 text-purple-300 text-sm font-medium mb-6" initial={{ opacity: 0, scale: 0.9 }} animate={{ opacity: 1, scale: 1 }} transition={{ delay: 0.2 }}>
+            <ArrowUpTrayIcon className="h-4 w-4" />
+            Community Upload
           </motion.div>
+          <h1 className="text-4xl sm:text-5xl font-bold text-white mb-4 tracking-tight">Share a Question Paper</h1>
+          <p className="text-lg text-gray-400 max-w-2xl mx-auto leading-relaxed">Upload your previous year question paper and help thousands of students prepare smarter. Every paper you contribute makes SmartPYQ better for everyone.</p>
+
         </div>
-      </div>
-
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+      </motion.div>
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pb-16">
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-          {/* Main Upload Section */}
-          <motion.div 
-            className="lg:col-span-2"
-            variants={itemVariants}
-          >
-            <div className="bg-white rounded-xl shadow-sm border border-gray-200">
-              <div className="p-6">
-                <h2 className="text-xl font-semibold text-gray-900 mb-6">
-                  Upload New Paper
-                </h2>
-                <UploadStepper onUploadComplete={handleUploadComplete} />
+          <motion.div className="lg:col-span-2" variants={fadeUp}>
+            <AnimatePresence>
+              {uploadSuccess && (
+                <motion.div initial={{ opacity: 0, y: -20 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -20 }}
+                  className="mb-6 p-4 rounded-xl bg-green-500/10 border border-green-500/30 flex items-center gap-3">
+                  <SparklesIcon className="h-5 w-5 text-green-400 flex-shrink-0" />
+                  <div><p className="text-green-300 font-medium text-sm">Upload successful!</p>
+                  <p className="text-green-400/70 text-xs mt-0.5">Your paper is now available in the PYQ Hub.</p></div>
+                </motion.div>
+              )}
+            </AnimatePresence>
+            {!isAuthenticated ? (
+              <div className="bg-white/[0.03] rounded-2xl border border-white/10 p-10 text-center">
+                <div className="w-16 h-16 rounded-2xl bg-purple-500/10 border border-purple-500/20 flex items-center justify-center mx-auto mb-6">
+                  <ShieldCheckIcon className="h-8 w-8 text-purple-400" />
+                </div>
+                <h3 className="text-xl font-semibold text-white mb-2">Login to Upload</h3>
+                <p className="text-gray-400 mb-8 max-w-md mx-auto">You need an account to contribute question papers. Logging in takes just a moment and helps us maintain quality.</p>
+                <div className="flex items-center justify-center gap-3">
+                  <a href="/login" className="btn btn-primary px-6 py-3">Login</a>
+                  <a href="/login" className="btn btn-secondary px-6 py-3">Create Account</a>
+                </div>
               </div>
-            </div>
+            ) : (
+              <UploadStepper onUploadComplete={handleUploadComplete} />
+            )}
           </motion.div>
-
-          {/* Sidebar */}
-          <motion.div 
-            className="space-y-6"
-            variants={itemVariants}
-          >
-            {/* Upload Guidelines */}
-            <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
-              <h3 className="text-lg font-semibold text-gray-900 mb-4">
-                <span role="img" aria-label="guidelines">📋</span> Upload Guidelines
-              </h3>
-              <ul className="space-y-3 text-sm text-gray-600">
-                <li className="flex items-start">
-                  <span className="text-green-500 mr-2 mt-0.5">✓</span>
-                  Upload clear, readable PDF files only
-                </li>
-                <li className="flex items-start">
-                  <span className="text-green-500 mr-2 mt-0.5">✓</span>
-                  Maximum file size: 10MB
-                </li>
-                <li className="flex items-start">
-                  <span className="text-green-500 mr-2 mt-0.5">✓</span>
-                  Include accurate metadata (subject, year, etc.)
-                </li>
-                <li className="flex items-start">
-                  <span className="text-green-500 mr-2 mt-0.5">✓</span>
-                  Only upload original question papers
-                </li>
-                <li className="flex items-start">
-                  <span className="text-red-500 mr-2 mt-0.5">✗</span>
-                  No copyrighted or restricted content
-                </li>
-                <li className="flex items-start">
-                  <span className="text-red-500 mr-2 mt-0.5">✗</span>
-                  No answer keys or solutions
-                </li>
-              </ul>
-            </div>
-
-            {/* Upload Stats */}
-            <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
-              <h3 className="text-lg font-semibold text-gray-900 mb-4">
-                <span role="img" aria-label="stats">📊</span> Your Upload Stats
+          <motion.div className="space-y-6" variants={fadeUp}>
+            <div className="bg-white/[0.03] rounded-2xl border border-white/10 p-6">
+              <h3 className="text-base font-semibold text-white mb-5 flex items-center gap-2">
+                <SparklesIcon className="h-5 w-5 text-purple-400" /> How It Works
               </h3>
               <div className="space-y-4">
-                <div className="flex justify-between items-center">
-                  <span className="text-sm text-gray-600">Total Uploads</span>
-                  <span className="font-semibold text-gray-900">{uploadStats.totalUploads.toLocaleString()}</span>
-                </div>
-                <div className="flex justify-between items-center">
-                  <span className="text-sm text-gray-600">Approved</span>
-                  <span className="font-semibold text-green-600">{uploadStats.approved.toLocaleString()}</span>
-                </div>
-                <div className="flex justify-between items-center">
-                  <span className="text-sm text-gray-600">Pending Review</span>
-                  <span className="font-semibold text-yellow-600">{uploadStats.pendingReview}</span>
-                </div>
-                <div className="flex justify-between items-center">
-                  <span className="text-sm text-gray-600">Rejected</span>
-                  <span className="font-semibold text-red-600">{uploadStats.rejected}</span>
-                </div>
-              </div>
-              
-              {/* Progress Bar */}
-              <div className="mt-4">
-                <div className="flex justify-between text-xs text-gray-500 mb-1">
-                  <span>Approval Rate</span>
-                  <span>{Math.round((uploadStats.approved / uploadStats.totalUploads) * 100)}%</span>
-                </div>
-                <div className="w-full bg-gray-200 rounded-full h-2">
-                  <div 
-                    className="bg-gradient-to-r from-green-500 to-green-600 h-2 rounded-full transition-all duration-500"
-                    style={{ width: `${(uploadStats.approved / uploadStats.totalUploads) * 100}%` }}
-                  ></div>
-                </div>
-              </div>
-            </div>
-
-            {/* Recent Uploads */}
-            <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
-              <h3 className="text-lg font-semibold text-gray-900 mb-4">
-                <span role="img" aria-label="recent">🕒</span> Recent Uploads
-              </h3>
-              <div className="space-y-3">
-                {recentUploads.map((upload) => (
-                  <motion.div
-                    key={upload.id}
-                    className="border border-gray-200 rounded-lg p-3 hover:bg-gray-50 transition-colors"
-                    whileHover={{ scale: 1.01 }}
-                    transition={{ duration: 0.2 }}
-                  >
-                    <div className="flex items-start justify-between mb-2">
-                      <h4 className="text-sm font-medium text-gray-900 line-clamp-2 flex-1 mr-2">
-                        {upload.title}
-                      </h4>
-                      <span className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-medium ${getStatusColor(upload.status)}`}>
-                        <span role="img" aria-label={upload.status} className="mr-1">
-                          {getStatusIcon(upload.status)}
-                        </span>
-                        {upload.status}
-                      </span>
-                    </div>
-                    <div className="flex items-center justify-between text-xs text-gray-500">
-                      <span>
-                        {new Date(upload.uploadedAt).toLocaleDateString()}
-                      </span>
-                      <span>
-                        {upload.downloads} downloads
-                      </span>
-                    </div>
-                  </motion.div>
+                {[
+                  { step: 1, title: 'Upload your file', desc: 'Drag or select your question paper (PDF or image)' },
+                  { step: 2, title: 'Review & edit', desc: 'Verify auto-detected details and questions' },
+                  { step: 3, title: 'Instant access', desc: 'Paper appears in the PYQ Hub immediately' }
+                ].map((item) => (
+                  <div key={item.step} className="flex gap-3">
+                    <div className="flex-shrink-0 w-7 h-7 rounded-lg bg-purple-500/15 border border-purple-500/25 flex items-center justify-center text-purple-300 text-xs font-bold">{item.step}</div>
+                    <div><p className="text-white text-sm font-medium">{item.title}</p><p className="text-gray-500 text-xs mt-0.5">{item.desc}</p></div>
+                  </div>
                 ))}
               </div>
-              
-              <motion.a
-                href="/profile/uploads"
-                className="block text-center text-sm text-brand-600 hover:text-brand-700 font-medium mt-4 focus:outline-none"
-                whileHover={{ scale: 1.02 }}
-                whileTap={{ scale: 0.98 }}
-              >
-                View all uploads →
-              </motion.a>
             </div>
-
-            {/* Rewards Info */}
-            <div className="bg-gradient-to-r from-brand-600 to-accent-600 rounded-xl p-6 text-white">
-              <h3 className="text-lg font-semibold mb-3">
-                <span role="img" aria-label="reward">🎁</span> Upload Rewards
+            <div className="bg-white/[0.03] rounded-2xl border border-white/10 p-6">
+              <h3 className="text-base font-semibold text-white mb-5 flex items-center gap-2">
+                <ShieldCheckIcon className="h-5 w-5 text-green-400" /> Upload Guidelines
               </h3>
-              <div className="space-y-2 text-sm">
-                <div className="flex items-center">
-                  <span role="img" aria-label="points" className="mr-2">⭐</span>
-                  <span>Earn 10 points per approved upload</span>
-                </div>
-                <div className="flex items-center">
-                  <span role="img" aria-label="badge" className="mr-2">🏆</span>
-                  <span>Unlock contributor badges</span>
-                </div>
-                <div className="flex items-center">
-                  <span role="img" aria-label="special" className="mr-2">🎓</span>
-                  <span>Help fellow students succeed</span>
-                </div>
+              <div className="space-y-3">
+                {[
+                  { ok: true, text: 'PDF, JPG, JPEG, PNG, or WEBP files' },
+                  { ok: true, text: 'Maximum file size: 50MB' },
+                  { ok: true, text: 'Auto-detected details can be edited before submit' },
+                  { ok: true, text: 'Original question papers only' },
+                  { ok: true, text: 'Clear, legible text for best auto-detection' },
+                  { ok: false, text: 'No answer keys or solutions' }
+                ].map((item, i) => (
+                  <div key={i} className="flex items-start gap-2">
+                    <span className={item.ok ? 'text-green-500 mt-0.5 text-xs' : 'text-red-400 mt-0.5 text-xs'}>&#x25CF;</span>
+                    <span className={'text-sm ' + (item.ok ? 'text-gray-400' : 'text-gray-500')}>{item.text}</span>
+                  </div>
+                ))}
               </div>
-              <motion.button
-                className="mt-4 w-full bg-white/20 hover:bg-white/30 text-white font-medium py-2 px-4 rounded-lg transition-colors focus:outline-none focus:ring-2 focus:ring-white/50"
-                whileHover={{ scale: 1.02 }}
-                whileTap={{ scale: 0.98 }}
-              >
-                Learn More
-              </motion.button>
+            </div>
+            <div className="bg-gradient-to-br from-purple-900/20 to-blue-900/20 rounded-2xl border border-purple-500/15 p-6">
+              <h3 className="text-base font-semibold text-white mb-3 flex items-center gap-2">
+                <StarIcon className="h-5 w-5 text-yellow-400" /> Why Contribute?
+              </h3>
+              <div className="space-y-3">
+                {[
+                  { text: 'Help thousands of students access study material' },
+                  { text: 'Make repeated question detection more accurate' },
+                  { text: 'Build the largest PYQ database for Osmania University' },
+                  { text: 'Earn recognition as a community contributor' }
+                ].map((item, i) => (
+                  <div key={i} className="flex items-start gap-2">
+                    <span className="text-green-400 mt-0.5 text-xs">&#x2713;</span>
+                    <span className="text-gray-300 text-sm">{item.text}</span>
+                  </div>
+                ))}
+              </div>
             </div>
           </motion.div>
         </div>
-      </div>
 
-      {/* FAQ Section */}
-      <motion.section 
-        className="py-16 bg-white"
-        variants={itemVariants}
-      >
-        <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="text-center mb-12">
-            <h2 className="text-3xl font-bold text-gray-900 mb-4">
-              <span role="img" aria-label="faq">❓</span> Frequently Asked Questions
+        <motion.section className="mt-16 max-w-3xl mx-auto" variants={fadeUp}>
+          <div className="text-center mb-10">
+            <h2 className="text-2xl font-bold text-white mb-2 flex items-center justify-center gap-2">
+              <QuestionMarkCircleIcon className="h-6 w-6 text-purple-400" />
+              Frequently Asked Questions
             </h2>
-            <p className="text-lg text-gray-600">
-              Common questions about uploading question papers
-            </p>
+            <p className="text-gray-400">Everything you need to know about uploading papers</p>
           </div>
-
-          <div className="space-y-6">
-            {[
-              {
-                question: "What file formats are supported?",
-                answer: "We currently support PDF files only. Make sure your file is clear and readable before uploading."
-              },
-              {
-                question: "How long does the review process take?",
-                answer: "Most uploads are reviewed within 24-48 hours. You'll receive an email notification once your paper is approved or if any changes are needed."
-              },
-              {
-                question: "Can I upload answer keys or solutions?",
-                answer: "No, we only accept original question papers. Answer keys, solutions, or study materials should not be uploaded."
-              },
-              {
-                question: "What happens if my upload is rejected?",
-                answer: "If your upload is rejected, you'll receive feedback on why it was rejected and can make corrections before re-uploading."
-              },
-              {
-                question: "Do I get credit for my uploads?",
-                answer: "Yes! You earn points for each approved upload and can unlock contributor badges and special recognition in the community."
-              }
-            ].map((faq, index) => (
-              <motion.div
-                key={index}
-                className="bg-gray-50 rounded-lg p-6"
-                initial={{ opacity: 0, y: 20 }}
-                whileInView={{ opacity: 1, y: 0 }}
-                viewport={{ once: true }}
-                transition={{ duration: 0.5, delay: index * 0.1 }}
-              >
-                <h3 className="text-lg font-semibold text-gray-900 mb-2">
-                  {faq.question}
-                </h3>
-                <p className="text-gray-600">
-                  {faq.answer}
-                </p>
+          <div className="space-y-3">
+            {faqs.map((faq, index) => (
+              <motion.div key={index} className="bg-white/[0.03] rounded-xl border border-white/10 overflow-hidden"
+                initial={{ opacity: 0, y: 16 }} whileInView={{ opacity: 1, y: 0 }} viewport={{ once: true }} transition={{ delay: index * 0.05, duration: 0.4 }}>
+                <button className="w-full px-6 py-4 flex items-center justify-between text-left hover:bg-white/[0.02] transition-colors"
+                  onClick={() => setExpandedFaq(expandedFaq === index ? null : index)}>
+                  <span className="text-white font-medium text-sm pr-4">{faq.q}</span>
+                  {expandedFaq === index ? <ChevronUpIcon className="h-5 w-5 text-gray-400 flex-shrink-0" /> : <ChevronDownIcon className="h-5 w-5 text-gray-400 flex-shrink-0" />}
+                </button>
+                <AnimatePresence>
+                  {expandedFaq === index && (
+                    <motion.div initial={{ height: 0, opacity: 0 }} animate={{ height: 'auto', opacity: 1 }} exit={{ height: 0, opacity: 0 }} transition={{ duration: 0.25 }}>
+                      <div className="px-6 pb-4 text-gray-400 text-sm leading-relaxed border-t border-white/5 pt-3">{faq.a}</div>
+                    </motion.div>
+                  )}
+                </AnimatePresence>
               </motion.div>
             ))}
           </div>
-
-          <motion.div 
-            className="text-center mt-12"
-            initial={{ opacity: 0, y: 20 }}
-            whileInView={{ opacity: 1, y: 0 }}
-            viewport={{ once: true }}
-            transition={{ duration: 0.6, delay: 0.5 }}
-          >
-            <p className="text-gray-600 mb-4">
-              Still have questions?
-            </p>
-            <motion.a
-              href="/support"
-              className="inline-flex items-center px-6 py-3 bg-brand-600 text-white font-medium rounded-lg hover:bg-brand-700 focus:outline-none focus:ring-4 focus:ring-brand-500/30 transition-colors"
-              whileHover={{ scale: 1.02, y: -2 }}
-              whileTap={{ scale: 0.98 }}
-            >
-              <span role="img" aria-label="support" className="mr-2">💬</span>
-              Contact Support
-            </motion.a>
-          </motion.div>
-        </div>
-      </motion.section>
+          <div className="text-center mt-8">
+            <a href="/support" className="btn btn-secondary px-6 py-2.5 text-sm">Need more help? Contact Support</a>
+          </div>
+        </motion.section>
+      </div>
     </motion.div>
   );
 };

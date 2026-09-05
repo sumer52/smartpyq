@@ -10,10 +10,9 @@ from fastapi import (
     APIRouter, 
     Depends, 
     HTTPException, 
-    status,
-    Form
+    status
 )
-from pydantic import BaseModel, EmailStr, Field
+from pydantic import BaseModel, Field
 
 from ..core.dependencies import (
     get_current_active_user,
@@ -22,11 +21,10 @@ from ..core.dependencies import (
 )
 from ..core.exceptions import (
     ValidationError,
-    NotFoundError,
-    DuplicateError
+    NotFoundError
 )
 from ..models.user import User
-from ..services.feature_service import FeatureService, NewsletterService
+from ..services.feature_service import FeatureService
 
 router = APIRouter(prefix="/features", tags=["features"])
 
@@ -58,33 +56,8 @@ class FeatureUpdateRequest(BaseModel):
     display_order: Optional[int] = Field(None, ge=0)
     is_active: Optional[bool] = None
     
-class SubscribeRequest(BaseModel):
-    """Newsletter subscription request"""
-    email: EmailStr
-    
-class SubscriberResponse(BaseModel):
-    """Subscriber response model"""
-    id: int
-    email: str
-    subscribed_at: datetime
-    is_active: bool
-    preferences: dict
-    
-class NewsletterStatsResponse(BaseModel):
-    """Newsletter statistics response"""
-    total_subscribers: int
-    active_subscribers: int
-    recent_subscriptions: int
-    unsubscribe_rate: float
-    
-class MessageResponse(BaseModel):
-    """Generic message response"""
-    message: str
-    success: bool = True
-
 # Initialize services
 feature_service = FeatureService()
-newsletter_service = NewsletterService()
 
 # Feature endpoints
 @router.get("/", response_model=List[FeatureResponse])
@@ -271,164 +244,3 @@ async def delete_feature(
             detail="Failed to delete feature"
         )
 
-# Newsletter endpoints
-@router.post("/subscribe", response_model=MessageResponse, status_code=status.HTTP_201_CREATED)
-async def subscribe_newsletter(
-    request: SubscribeRequest,
-    client_ip: str = Depends(get_client_ip)
-):
-    """Subscribe to newsletter
-    
-    Adds email to newsletter subscription list.
-    No authentication required - public endpoint.
-    """
-    try:
-        await newsletter_service.subscribe(
-            email=request.email,
-            client_ip=client_ip
-        )
-        
-        return MessageResponse(
-            message="Successfully subscribed to newsletter. Thank you!"
-        )
-        
-    except DuplicateError:
-        return MessageResponse(
-            message="Email is already subscribed to newsletter."
-        )
-    except ValidationError as e:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail=str(e)
-        )
-    except Exception as e:
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="Subscription failed. Please try again."
-        )
-
-@router.post("/unsubscribe")
-async def unsubscribe_newsletter(
-    email: EmailStr = Form(...),
-    client_ip: str = Depends(get_client_ip)
-):
-    """Unsubscribe from newsletter
-    
-    Removes email from newsletter subscription list.
-    """
-    try:
-        result = await newsletter_service.unsubscribe(
-            email=email,
-            client_ip=client_ip
-        )
-        
-        if result:
-            return {"message": "Successfully unsubscribed from newsletter."}
-        else:
-            return {"message": "Email not found in subscription list."}
-            
-    except Exception as e:
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="Unsubscribe failed. Please try again."
-        )
-
-@router.get("/subscribers", response_model=List[SubscriberResponse])
-async def get_subscribers(
-    page: int = 1,
-    per_page: int = 50,
-    active_only: bool = True,
-    current_user: User = Depends(require_roles(["admin"]))
-):
-    """Get newsletter subscribers (admin only)
-    
-    Returns paginated list of newsletter subscribers.
-    """
-    try:
-        subscribers = await newsletter_service.get_subscribers(
-            page=page,
-            per_page=per_page,
-            active_only=active_only
-        )
-        
-        return [SubscriberResponse(**sub) for sub in subscribers]
-        
-    except Exception as e:
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="Failed to retrieve subscribers"
-        )
-
-@router.get("/newsletter/stats", response_model=NewsletterStatsResponse)
-async def get_newsletter_stats(
-    current_user: User = Depends(require_roles(["admin"]))
-):
-    """Get newsletter statistics (admin only)
-    
-    Returns subscription statistics and metrics.
-    """
-    try:
-        stats = await newsletter_service.get_stats()
-        return NewsletterStatsResponse(**stats)
-        
-    except Exception as e:
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="Failed to retrieve newsletter statistics"
-        )
-
-@router.post("/newsletter/send")
-async def send_newsletter(
-    subject: str = Form(..., min_length=5, max_length=200),
-    content: str = Form(..., min_length=50),
-    send_to_all: bool = Form(default=True),
-    current_user: User = Depends(require_roles(["admin"])),
-    client_ip: str = Depends(get_client_ip)
-):
-    """Send newsletter (admin only)
-    
-    Sends newsletter to all active subscribers.
-    Processing happens in background job.
-    """
-    try:
-        job_id = await newsletter_service.send_newsletter(
-            subject=subject,
-            content=content,
-            send_to_all=send_to_all,
-            sender_id=current_user.id,
-            client_ip=client_ip
-        )
-        
-        return {
-            "message": "Newsletter queued for sending",
-            "job_id": job_id
-        }
-        
-    except ValidationError as e:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail=str(e)
-        )
-    except Exception as e:
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="Failed to send newsletter"
-        )
-
-@router.get("/feature-stats")
-async def get_feature_stats(
-    current_user: User = Depends(require_roles(["admin"]))
-):
-    """Get feature usage statistics (admin only)
-    
-    Returns statistics about feature usage and engagement.
-    """
-    try:
-        stats = await feature_service.get_feature_stats()
-        return stats
-        
-    except Exception as e:
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="Failed to retrieve feature statistics"
-        )

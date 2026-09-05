@@ -9,7 +9,7 @@ from app.repositories.user_repository import UserRepository
 from app.repositories.tenant_repository import TenantRepository
 from app.repositories.paper_repository import PaperRepository
 from app.repositories.chat_repository import ChatRepository, ChatMessageRepository
-from app.repositories.feature_repository import FeatureRepository, SubscriberRepository
+from app.repositories.feature_repository import FeatureRepository
 from app.repositories.audit_log_repository import AuditLogRepository
 
 __all__ = [
@@ -23,6 +23,5 @@ __all__ = [
     "ChatRepository",
     "ChatMessageRepository",
     "FeatureRepository",
-    "SubscriberRepository",
     "AuditLogRepository",
 ]

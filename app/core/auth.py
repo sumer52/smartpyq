@@ -10,9 +10,8 @@ from typing import Optional, Dict, Any, Union
 import jwt
 from argon2 import PasswordHasher
 from argon2.exceptions import VerifyMismatchError, HashingError
-from fastapi import HTTPException, status
-from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from fastapi import Request
+from fastapi.security import HTTPBearer
 
 from app.core.config import settings
 from app.core.exceptions import AuthenticationError, ValidationError
@@ -316,61 +315,3 @@ class AuthManager:
 
 # Global auth manager instance
 auth_manager = AuthManager()
-
-
-# Convenience functions
-def hash_password(password: str) -> str:
-    """Hash a password."""
-    return auth_manager.hash_password(password)
-
-
-def verify_password(password: str, hashed_password: str) -> bool:
-    """Verify a password."""
-    return auth_manager.verify_password(password, hashed_password)
-
-
-def create_access_token(
-    subject: Union[str, int],
-    user_id: int,
-    role: str,
-    tenant_id: Optional[int] = None,
-    expires_delta: Optional[timedelta] = None,
-    additional_claims: Optional[Dict[str, Any]] = None
-) -> str:
-    """Create an access token."""
-    return auth_manager.create_access_token(
-        subject=subject,
-        user_id=user_id,
-        role=role,
-        tenant_id=tenant_id,
-        expires_delta=expires_delta,
-        additional_claims=additional_claims
-    )
-
-
-def create_refresh_token(
-    subject: Union[str, int],
-    user_id: int,
-    expires_delta: Optional[timedelta] = None
-) -> str:
-    """Create a refresh token."""
-    return auth_manager.create_refresh_token(
-        subject=subject,
-        user_id=user_id,
-        expires_delta=expires_delta
-    )
-
-
-def decode_token(token: str) -> Dict[str, Any]:
-    """Decode a JWT token."""
-    return auth_manager.decode_token(token)
-
-
-def generate_otp(length: int = 6) -> str:
-    """Generate a numeric OTP."""
-    return auth_manager.generate_otp(length)
-
-
-def generate_secure_token(length: int = 32) -> str:
-    """Generate a secure random token."""
-    return auth_manager.generate_secure_token(length)

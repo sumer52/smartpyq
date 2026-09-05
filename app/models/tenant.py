@@ -4,6 +4,7 @@ Manages tenant organizations with domain restrictions and access controls.
 """
 
 from datetime import datetime
+from enum import Enum
 from typing import List, Optional
 
 from sqlalchemy import Column, Integer, String, DateTime, Text, Boolean, JSON
@@ -11,6 +12,12 @@ from sqlalchemy.orm import relationship
 from sqlalchemy.sql import func
 
 from app.core.database import Base
+
+
+class TenantStatus(str, Enum):
+    ACTIVE = "active"
+    INACTIVE = "inactive"
+    SUSPENDED = "suspended"
 
 
 class Tenant(Base):
@@ -51,6 +58,7 @@ class Tenant(Base):
     # Relationships
     users = relationship("User", back_populates="tenant", cascade="all, delete-orphan")
     papers = relationship("Paper", back_populates="tenant", cascade="all, delete-orphan")
+    audit_logs = relationship("AuditLog", back_populates="tenant")
     
     def __repr__(self) -> str:
         return f"<Tenant(id={self.id}, name='{self.name}', slug='{self.slug}')>"

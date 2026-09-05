@@ -1,14 +1,21 @@
-import React, { Suspense, lazy } from 'react';
-import { Routes, Route, Navigate } from 'react-router-dom';
+import React, { Suspense, lazy, useState, useCallback, useEffect, useRef } from 'react';
+import { Routes, Route, Navigate, useLocation, useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import { AuthProvider, useAuth } from './contexts/AuthContext';
-import Header from './components/Header';
+import { IntroVideoProvider, useIntroVideo } from './contexts/IntroVideoContext';
+
+import FuturisticHeader from './components/FuturisticHeader';
+import VideoBackground from './components/VideoBackground';
 import Footer from './components/Footer';
 import ChatWidget from './components/ChatWidget';
+import ScrollToTop from './components/ScrollToTop';
+import IntroVideo from './components/IntroVideo';
+import SessionExpiredBanner from './components/SessionExpiredBanner';
+import OfflineBanner from './components/OfflineBanner';
+import MaintenanceBanner from './components/MaintenanceBanner';
 
 // Lazy load pages for better performance
 const HomePage = lazy(() => import('./pages/HomePage'));
-const BrowsePage = lazy(() => import('./pages/BrowsePage'));
 const PYQPage = lazy(() => import('./pages/PYQPage'));
 const UploadPage = lazy(() => import('./pages/UploadPage'));
 const AIPage = lazy(() => import('./pages/AIPage'));
@@ -18,9 +25,21 @@ const PrivacyPage = lazy(() => import('./pages/PrivacyPage'));
 const TermsPage = lazy(() => import('./pages/TermsPage'));
 const ReportIssuePage = lazy(() => import('./pages/ReportIssuePage'));
 const LoginPage = lazy(() => import('./pages/LoginPage'));
-const RegisterPage = lazy(() => import('./pages/RegisterPage'));
 const DashboardPage = lazy(() => import('./pages/DashboardPage'));
 const ProfilePage = lazy(() => import('./pages/ProfilePage'));
+const RepeatedQuestionsPage = lazy(() => import('./pages/RepeatedQuestionsPage'));
+const AnalysisPage = lazy(() => import('./pages/AnalysisPage'));
+const PracticePage = lazy(() => import('./pages/PracticePage'));
+const SearchPage = lazy(() => import('./pages/SearchPage'));
+const AnalysisHistoryPage = lazy(() => import('./pages/AnalysisHistoryPage'));
+const BookmarksPage = lazy(() => import('./pages/BookmarksPage'));
+const NotFoundPage = lazy(() => import('./pages/NotFoundPage'));
+const ForgotPasswordPage = lazy(() => import('./pages/ForgotPasswordPage'));
+const CookiePolicyPage = lazy(() => import('./pages/CookiePolicyPage'));
+const RegisterPage = lazy(() => import('./pages/RegisterPage'));
+const ErrorPage = lazy(() => import('./pages/ErrorPage'));
+const AccessibilityStatementPage = lazy(() => import('./pages/AccessibilityStatementPage'));
+const AcceptableUsePage = lazy(() => import('./pages/AcceptableUsePage'));
 
 // Loading component with skeleton
 const PageLoader = () => (
@@ -61,15 +80,45 @@ const pageTransition = {
   duration: 0.3,
 };
 
-// Protected Route Component
+// Route prefetching on hover/focus using dynamic import
+const routeImportMap = {
+  '/': () => import('./pages/HomePage'),
+  '/pyq': () => import('./pages/PYQPage'),
+  '/upload': () => import('./pages/UploadPage'),
+  '/ai': () => import('./pages/AIPage'),
+  '/search': () => import('./pages/SearchPage'),
+  '/analyze': () => import('./pages/AnalysisPage'),
+  '/practice': () => import('./pages/PracticePage'),
+  '/bookmarks': () => import('./pages/BookmarksPage'),
+  '/dashboard': () => import('./pages/DashboardPage'),
+  '/profile': () => import('./pages/ProfilePage'),
+};
+
+const PrefetchLink = ({ to, children, ...props }) => {
+  const prefetched = useRef(false);
+  const handleIntent = useCallback(() => {
+    if (prefetched.current) return;
+    prefetched.current = true;
+    const importer = routeImportMap[to];
+    if (importer) importer().catch(() => {});
+  }, [to]);
+  return (
+    <span onMouseEnter={handleIntent} onFocus={handleIntent} {...props}>
+      {children}
+    </span>
+  );
+};
+
+// Protected Route Component - preserves intended destination
 const ProtectedRoute = ({ children }) => {
   const { isAuthenticated, isLoading } = useAuth();
+  const location = useLocation();
   
   if (isLoading) {
     return <PageLoader />;
   }
   
-  return isAuthenticated ? children : <Navigate to="/login" replace />;
+  return isAuthenticated ? children : <Navigate to="/login" state={{ from: location }} replace />;
 };
 
 // Public Route Component (redirect to dashboard if authenticated)
@@ -83,16 +132,45 @@ const PublicRoute = ({ children }) => {
   return !isAuthenticated ? children : <Navigate to="/dashboard" replace />;
 };
 
-function AppContent() {
+
+const AppContent = React.memo(function AppContent() {
+  const { checkInitialIntro } = useIntroVideo();
+  const { isAuthenticated, isLoading } = useAuth();
+  const location = useLocation();
+  
+  // Check if intro should play on first load.
+  // Spec: the intro is exclusive to the Home route — it must only gate the
+  // Home page for guests. Direct visits to any other page open immediately.
+  React.useEffect(() => {
+    if (!isLoading && location.pathname === '/') {
+      checkInitialIntro(isAuthenticated);
+    }
+  }, [isLoading, isAuthenticated, checkInitialIntro, location.pathname]);
+
   return (
-    <div className="App min-h-screen bg-bg-light dark:bg-bg-dark">
+    <div className="App min-h-screen" style={{position:"relative",zIndex:10}}>
       <SkipLink />
       
-      {/* Header */}
-      <Header />
       
+      <VideoBackground />
+      
+      {/* Ambient background orbs - wrapped in overflow:hidden to prevent mobile horizontal scroll */}
+      <div className="fixed inset-0 overflow-hidden pointer-events-none" aria-hidden="true">
+        <div className="ambient-orb ambient-orb--purple" style={{width:'600px',height:'600px',top:'-200px',right:'-200px'}} />
+        <div className="ambient-orb ambient-orb--blue" style={{width:'500px',height:'500px',bottom:'-150px',left:'-150px'}} />
+        <div className="ambient-orb ambient-orb--pink" style={{width:'400px',height:'400px',top:'40%',left:'30%'}} />
+      </div>
+      <FuturisticHeader />
+      <ScrollToTop />
+      <SessionExpiredBanner />
+      <OfflineBanner />
+      <MaintenanceBanner />
+      
+      {/* Intro Video Overlay - triggered by Home click for guests */}
+      <IntroVideo />
+      
+      <main id="main-content" className="flex-1 relative" style={{zIndex:10, paddingTop: "70px"}}>
       {/* Main Content */}
-      <main id="main-content" className="flex-1">
         <AnimatePresence mode="wait">
           <Suspense fallback={<PageLoader />}>
             <Routes>
@@ -126,22 +204,7 @@ function AppContent() {
                     </PublicRoute>
                   } 
                 />
-                <Route 
-                  path="/register" 
-                  element={
-                    <PublicRoute>
-                      <motion.div
-                        initial="initial"
-                        animate="in"
-                        exit="out"
-                        variants={pageVariants}
-                        transition={pageTransition}
-                      >
-                        <RegisterPage />
-                      </motion.div>
-                    </PublicRoute>
-                  } 
-                />
+                
                 <Route 
                    path="/dashboard" 
                    element={
@@ -174,34 +237,83 @@ function AppContent() {
                      </ProtectedRoute>
                    } 
                  />
-                <Route 
-                  path="/browse" 
-                  element={
-                    <motion.div
-                      initial="initial"
-                      animate="in"
-                      exit="out"
-                      variants={pageVariants}
-                      transition={pageTransition}
-                    >
-                      <BrowsePage />
-                    </motion.div>
-                  } 
-                />
+
                 <Route 
                   path="/pyq" 
                   element={
-                    <motion.div
-                      initial="initial"
-                      animate="in"
-                      exit="out"
-                      variants={pageVariants}
-                      transition={pageTransition}
-                    >
-                      <PYQPage />
-                    </motion.div>
-                  } 
-                />
+                    <ProtectedRoute>
+                      <motion.div
+                        initial="initial"
+                        animate="in"
+                        exit="out"
+                        variants={pageVariants}
+                        transition={pageTransition}
+                      >
+                        <PYQPage />
+                      </motion.div>
+                    </ProtectedRoute>
+                   }
+                 />
+                 <Route 
+                   path="/repeated-questions" 
+                   element={
+                     <ProtectedRoute>
+                       <motion.div initial="initial" animate="in" exit="out" variants={pageVariants} transition={pageTransition}>
+                         <RepeatedQuestionsPage />
+                       </motion.div>
+                     </ProtectedRoute>
+                   }
+                 />
+                 <Route 
+                   path="/analyze"
+                   element={
+                     <ProtectedRoute>
+                       <motion.div initial="initial" animate="in" exit="out" variants={pageVariants} transition={pageTransition}>
+                         <AnalysisPage />
+                       </motion.div>
+                     </ProtectedRoute>
+                   }
+                 />
+                 <Route 
+                   path="/practice"
+                   element={
+                     <ProtectedRoute>
+                       <motion.div initial="initial" animate="in" exit="out" variants={pageVariants} transition={pageTransition}>
+                         <PracticePage />
+                       </motion.div>
+                     </ProtectedRoute>
+                   }
+                 />
+                 <Route 
+                   path="/search"
+                   element={
+                     <ProtectedRoute>
+                       <motion.div initial="initial" animate="in" exit="out" variants={pageVariants} transition={pageTransition}>
+                         <SearchPage />
+                       </motion.div>
+                     </ProtectedRoute>
+                   }
+                 />
+                 <Route 
+                   path="/analysis-history"
+                   element={
+                     <ProtectedRoute>
+                       <motion.div initial="initial" animate="in" exit="out" variants={pageVariants} transition={pageTransition}>
+                         <AnalysisHistoryPage />
+                       </motion.div>
+                     </ProtectedRoute>
+                   }
+                 />
+                 <Route 
+                   path="/bookmarks" 
+                   element={
+                     <ProtectedRoute>
+                       <motion.div initial="initial" animate="in" exit="out" variants={pageVariants} transition={pageTransition}>
+                         <BookmarksPage />
+                       </motion.div>
+                     </ProtectedRoute>
+                   }
+                 />
                 <Route 
                   path="/upload" 
                   element={
@@ -221,15 +333,17 @@ function AppContent() {
                 <Route 
                   path="/ai" 
                   element={
-                    <motion.div
-                      initial="initial"
-                      animate="in"
-                      exit="out"
-                      variants={pageVariants}
-                      transition={pageTransition}
-                    >
-                      <AIPage />
-                    </motion.div>
+                    <ProtectedRoute>
+                      <motion.div
+                        initial="initial"
+                        animate="in"
+                        exit="out"
+                        variants={pageVariants}
+                        transition={pageTransition}
+                      >
+                        <AIPage />
+                      </motion.div>
+                    </ProtectedRoute>
                   } 
                 />
                 <Route 
@@ -302,6 +416,85 @@ function AppContent() {
                     </motion.div>
                   } 
                 />
+                <Route 
+                  path="/forgot-password" 
+                  element={
+                    <PublicRoute>
+                      <motion.div
+                        initial="initial"
+                        animate="in"
+                        exit="out"
+                        variants={pageVariants}
+                        transition={pageTransition}
+                      >
+                        <ForgotPasswordPage />
+                      </motion.div>
+                    </PublicRoute>
+                  } 
+                />
+                <Route 
+                  path="/cookies" 
+                  element={
+                    <motion.div
+                      initial="initial"
+                      animate="in"
+                      exit="out"
+                      variants={pageVariants}
+                      transition={pageTransition}
+                    >
+                      <CookiePolicyPage />
+                    </motion.div>
+                  } 
+                />
+                <Route 
+                  path="/register" 
+                  element={
+                    <PublicRoute>
+                      <motion.div initial="initial" animate="in" exit="out" variants={pageVariants} transition={pageTransition}>
+                        <RegisterPage />
+                      </motion.div>
+                    </PublicRoute>
+                  } 
+                />
+                <Route 
+                  path="/error/:code" 
+                  element={
+                    <motion.div initial="initial" animate="in" exit="out" variants={pageVariants} transition={pageTransition}>
+                      <ErrorPage />
+                    </motion.div>
+                  } 
+                />
+                <Route 
+                  path="/accessibility" 
+                  element={
+                    <motion.div initial="initial" animate="in" exit="out" variants={pageVariants} transition={pageTransition}>
+                      <AccessibilityStatementPage />
+                    </motion.div>
+                  } 
+                />
+                <Route 
+                  path="/acceptable-use" 
+                  element={
+                    <motion.div initial="initial" animate="in" exit="out" variants={pageVariants} transition={pageTransition}>
+                      <AcceptableUsePage />
+                    </motion.div>
+                  } 
+                />
+                {/* 404 Catch-all */}
+                <Route 
+                  path="*" 
+                  element={
+                    <motion.div
+                      initial="initial"
+                      animate="in"
+                      exit="out"
+                      variants={pageVariants}
+                      transition={pageTransition}
+                    >
+                      <NotFoundPage />
+                    </motion.div>
+                  } 
+                />
               </Routes>
             </Suspense>
           </AnimatePresence>
@@ -322,12 +515,14 @@ function AppContent() {
         ></div>
       </div>
   );
-}
+});
 
 function App() {
   return (
     <AuthProvider>
-      <AppContent />
+      <IntroVideoProvider>
+        <AppContent />
+      </IntroVideoProvider>
     </AuthProvider>
   );
 }

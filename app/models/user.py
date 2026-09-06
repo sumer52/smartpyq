@@ -16,9 +16,7 @@ from sqlalchemy.types import Enum as SQLEnum
 
 from app.core.database import Base
 
-
 class UserRole(str, Enum):
-    """User role enumeration."""
     STUDENT = "student"
     ADMIN = "admin"
     TENANT_ADMIN = "tenant_admin"
@@ -26,44 +24,26 @@ class UserRole(str, Enum):
 
 
 class UserStatus(str, Enum):
-    """User status enumeration."""
-    PENDING = "pending"  # Email not verified
-    ACTIVE = "active"    # Active user
-    SUSPENDED = "suspended"  # Temporarily suspended
-    BANNED = "banned"    # Permanently banned
+    ACTIVE = "active"
+    INACTIVE = "inactive"
+    SUSPENDED = "suspended"
 
 
 class User(Base):
-    """User model for authentication and profile management.
-    
-    Represents users in the system with role-based access control,
-    tenant relationships, and authentication features.
-    """
-    
     __tablename__ = "users"
-    
-    # Primary key
+
     id = Column(Integer, primary_key=True, index=True)
-    
-    # Basic information
     email = Column(String(255), unique=True, nullable=False, index=True)
     username = Column(String(100), unique=True, nullable=True, index=True)
-    full_name = Column(String(255), nullable=False)
-    
-    # Authentication
-    password_hash = Column(String(255), nullable=True)  # Nullable for social auth
-    is_email_verified = Column(Boolean, default=False, nullable=False)
-    email_verification_token = Column(String(255), nullable=True)
-    
-    # Role and permissions
+    full_name = Column(String(255), nullable=True)
+    password_hash = Column(String(255), nullable=True)
     role = Column(SQLEnum(UserRole), default=UserRole.STUDENT, nullable=False)
-    status = Column(SQLEnum(UserStatus), default=UserStatus.PENDING, nullable=False)
-    
-    # Tenant relationship
-    tenant_id = Column(Integer, ForeignKey("tenants.id"), nullable=False, index=True)
+    status = Column(SQLEnum(UserStatus), default=UserStatus.ACTIVE, nullable=False)
+    tenant_id = Column(Integer, ForeignKey("tenants.id"), nullable=True, index=True)
+    is_email_verified = Column(Boolean, default=False, nullable=False)
     domain_verified = Column(Boolean, default=False, nullable=False)
-    
-    # Profile information
+    email_verified_at = Column(DateTime(timezone=True), nullable=True)
+
     avatar_url = Column(String(500), nullable=True)
     bio = Column(Text, nullable=True)
     phone = Column(String(20), nullable=True)
@@ -71,7 +51,11 @@ class User(Base):
     # Academic information (for students)
     university = Column(String(255), nullable=True)
     course = Column(String(255), nullable=True)
+    specialization = Column(String(100), nullable=True)  # e.g., 'mscs', 'mpc'
+    academic_year = Column(String(50), nullable=True)     # e.g., '1st Year', '2nd Year'
+    semester = Column(String(50), nullable=True)           # e.g., 'sem1', 'sem3'
     year_of_study = Column(Integer, nullable=True)
+    onboarding_completed = Column(Boolean, default=False, nullable=False)
     
     # Social authentication
     google_id = Column(String(100), nullable=True, unique=True)
@@ -232,7 +216,11 @@ class User(Base):
             "bio": self.bio,
             "university": self.university,
             "course": self.course,
+            "specialization": self.specialization,
+            "academic_year": self.academic_year,
+            "semester": self.semester,
             "year_of_study": self.year_of_study,
+            "onboarding_completed": self.onboarding_completed,
             "preferences": self.preferences,
             "created_at": self.created_at.isoformat() if self.created_at else None,
             "updated_at": self.updated_at.isoformat() if self.updated_at else None,
@@ -249,51 +237,3 @@ class User(Base):
         
         return data
 
-
-class Subscriber(Base):
-    """Newsletter subscriber model.
-    
-    Represents users who have subscribed to the newsletter.
-    """
-    
-    __tablename__ = "subscribers"
-    
-    # Primary key
-    id = Column(Integer, primary_key=True, index=True)
-    
-    # Email address (unique)
-    email = Column(String(255), unique=True, nullable=False, index=True)
-    
-    # Subscription metadata
-    source = Column(String(50), default="website")  # Subscription source
-    preferences = Column(JSON, default=dict)  # Subscription preferences
-    is_active = Column(Boolean, default=True, nullable=False)  # Active subscription
-    
-    # Unsubscription data
-    unsubscribe_reason = Column(Text, nullable=True)  # Reason for unsubscribing
-    unsubscribed_at = Column(DateTime, nullable=True)  # When unsubscribed
-    
-    # Timestamps
-    subscribed_at = Column(DateTime, default=func.now(), nullable=False)
-    updated_at = Column(DateTime, default=func.now(), onupdate=func.now())
-    
-    def __repr__(self) -> str:
-        return f"<Subscriber(email='{self.email}', active={self.is_active})>"
-    
-    def to_dict(self) -> dict:
-        """Convert subscriber to dictionary representation.
-        
-        Returns:
-            dict: Subscriber data as dictionary
-        """
-        return {
-            "id": self.id,
-            "email": self.email,
-            "source": self.source,
-            "preferences": self.preferences,
-            "is_active": self.is_active,
-            "unsubscribe_reason": self.unsubscribe_reason,
-            "subscribed_at": self.subscribed_at.isoformat() if self.subscribed_at else None,
-            "unsubscribed_at": self.unsubscribed_at.isoformat() if self.unsubscribed_at else None,
-            "updated_at": self.updated_at.isoformat() if self.updated_at else None
-        }

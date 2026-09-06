@@ -1,598 +1,247 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { ChevronLeft, Search, Filter, BookOpen, Calendar, GraduationCap, FileText } from 'lucide-react';
-import { pyqData, getYears, getSemesters, getExamYears, getStreams, getSpecializations, getSubjects } from '../data/pyqData';
+import { ChevronLeft, ChevronRight, Search, BookOpen, Calendar, GraduationCap, FileText, Download, Eye, Heart } from 'lucide-react';
+import { getStreams, getSpecializations, getSemesters, getSubjects, getPyqYears, getSemesterOptions } from '../data/pyqData';
+import { apiClient } from '../lib/api';
+import { useAuth } from '../contexts/AuthContext';
+import SpotlightCard from './ui/SpotlightCard';
+import MagneticButton from './ui/MagneticButton';
 
 const PYQNavigator = () => {
-  const [currentLevel, setCurrentLevel] = useState('years'); // years, semesters, examYears, streams, subjects
-  const [selectedYear, setSelectedYear] = useState(null);
-  const [selectedSemester, setSelectedSemester] = useState(null);
-  const [selectedExamYear, setSelectedExamYear] = useState(null);
+  const [currentLevel, setCurrentLevel] = useState('streams');
   const [selectedStream, setSelectedStream] = useState(null);
-  const [selectedSpecialization, setSelectedSpecialization] = useState(null);
+  const [selectedSpec, setSelectedSpec] = useState(null);
+  const [selectedSem, setSelectedSem] = useState(null);
+  const [selectedSubject, setSelectedSubject] = useState(null);
+  const [selectedPyqYear, setSelectedPyqYear] = useState(null);
   const [searchTerm, setSearchTerm] = useState('');
-  const [showFilters, setShowFilters] = useState(false);
-
-  // Navigation breadcrumb
-  const getBreadcrumb = () => {
-    const breadcrumb = [];
-    if (selectedYear) breadcrumb.push(selectedYear.displayName);
-    if (selectedSemester) breadcrumb.push(selectedSemester.displayName);
-    if (selectedExamYear) breadcrumb.push(selectedExamYear.toString());
-    if (selectedStream) breadcrumb.push(selectedStream.displayName);
-    if (selectedSpecialization) breadcrumb.push(selectedSpecialization.displayName);
-    return breadcrumb;
+  const [papers, setPapers] = useState([]);
+  const [isLoadingPapers, setIsLoadingPapers] = useState(false);
+  const [paperError, setPaperError] = useState(null);
+  const [previewPaper, setPreviewPaper] = useState(null);
+  const [previewUrl, setPreviewUrl] = useState(null);
+  const [bookmarkedPapers, setBookmarkedPapers] = useState(new Set());
+  const { user, isDemoUser } = useAuth();
+  
+  const isUnlocked = (streamId, specId) => {
+    // Demo users see everything unlocked
+    if (isDemoUser) return true;
+    // Admins see everything
+    if (user?.role === 'admin' || user?.role === 'super_admin' || user?.role === 'tenant_admin') return true;
+    // Check if user matches this stream/spec
+    const userStream = user?.course?.toLowerCase()?.includes('bsc') ? 'bsc' : user?.course?.toLowerCase()?.includes('bcom') ? 'bcom' : user?.course?.toLowerCase()?.includes('bca') ? 'bca' : user?.course?.toLowerCase()?.includes('bba') ? 'bba' : '';
+    if (streamId === userStream && (!specId || specId === user?.specialization)) return true;
+    return false;
   };
 
-  // Animation variants
-  const containerVariants = {
-    hidden: { opacity: 0 },
-    visible: {
-      opacity: 1,
-      transition: {
-        staggerChildren: 0.1
-      }
-    },
-    exit: {
-      opacity: 0,
-      transition: {
-        staggerChildren: 0.05,
-        staggerDirection: -1
-      }
-    }
-  };
+  useEffect(() => {
+    const fetchPapers = async () => {
+      if (!selectedSubject || !selectedPyqYear || !selectedStream) return;
+      setIsLoadingPapers(true); setPaperError(null);
+      try {
+        const r = await apiClient.getPapers({ subject: selectedSubject, stream: selectedStream.id, year: selectedPyqYear, semester: selectedSem?.id, paper_status: 'approved', per_page: 50 });
+        setPapers(r.papers || []);
+      } catch (e) { setPaperError('No papers available yet. Be the first to upload!'); setPapers([]); }
+      finally { setIsLoadingPapers(false); }
+    };
+    fetchPapers();
+  }, [selectedSubject, selectedPyqYear, selectedStream, selectedSem]);
 
-  const cardVariants = {
-    hidden: { 
-      opacity: 0, 
-      y: 20,
-      scale: 0.9
-    },
-    visible: { 
-      opacity: 1, 
-      y: 0,
-      scale: 1,
-      transition: {
-        type: "spring",
-        stiffness: 300,
-        damping: 24
-      }
-    },
-    exit: {
-      opacity: 0,
-      y: -20,
-      scale: 0.9,
-      transition: {
-        duration: 0.2
-      }
-    },
-    hover: {
-      scale: 1.05,
-      y: -5,
-      transition: {
-        type: "spring",
-        stiffness: 400,
-        damping: 10
-      }
-    }
-  };
-
-  // Navigation handlers
-  const handleYearSelect = (year) => {
-    setSelectedYear(year);
-    setCurrentLevel('semesters');
-  };
-
-  const handleSemesterSelect = (semester) => {
-    setSelectedSemester(semester);
-    setCurrentLevel('examYears');
-  };
-
-  const handleExamYearSelect = (examYear) => {
-    setSelectedExamYear(examYear);
-    setCurrentLevel('streams');
-  };
-
-  const handleStreamSelect = (streamKey, stream) => {
-    setSelectedStream({ ...stream, key: streamKey });
-    setCurrentLevel('specializations');
-  };
-
-  const handleSpecializationSelect = (specializationKey, specialization) => {
-    setSelectedSpecialization({ ...specialization, key: specializationKey });
-    setCurrentLevel('subjects');
-  };
-
+  const handleStreamSelect = (k, s) => { setSelectedStream({...s, key: k}); setCurrentLevel('specializations'); };
+  const handleSpecSelect = (k, s) => { setSelectedSpec({...s, key: k}); setCurrentLevel('semesters'); };
+  const handleSemSelect = (s) => { setSelectedSem(s); setCurrentLevel('subjects'); };
+  const handleSubjectSelect = (s) => { setSelectedSubject(s); setCurrentLevel('pyqYears'); };
+  const handleYearSelect = (y) => { setSelectedPyqYear(y); setCurrentLevel('papers'); };
   const handleBack = () => {
-    switch (currentLevel) {
-      case 'semesters':
-        setCurrentLevel('years');
-        setSelectedYear(null);
-        break;
-      case 'examYears':
-        setCurrentLevel('semesters');
-        setSelectedSemester(null);
-        break;
-      case 'streams':
-        setCurrentLevel('examYears');
-        setSelectedExamYear(null);
-        break;
-      case 'specializations':
-        setCurrentLevel('streams');
-        setSelectedStream(null);
-        break;
-      case 'subjects':
-        setCurrentLevel('specializations');
-        setSelectedSpecialization(null);
-        break;
-      default:
-        break;
+    if (currentLevel === 'specializations') { setCurrentLevel('streams'); setSelectedStream(null); }
+    else if (currentLevel === 'semesters') { setCurrentLevel('specializations'); setSelectedSpec(null); }
+    else if (currentLevel === 'subjects') { setCurrentLevel('semesters'); setSelectedSem(null); }
+    else if (currentLevel === 'pyqYears') { setCurrentLevel('subjects'); setSelectedSubject(null); }
+    else if (currentLevel === 'papers') { setCurrentLevel('pyqYears'); setSelectedPyqYear(null); setPapers([]); }
+  };
+  const handleReset = () => { setCurrentLevel('streams'); setSelectedStream(null); setSelectedSpec(null); setSelectedSem(null); setSelectedSubject(null); setSelectedPyqYear(null); setSearchTerm(''); setPapers([]); };
+  const handleDownload = async (p) => { try { await apiClient.authorizePaperDownload(p.id); } catch(e) { console.error('Download failed:', e); alert('Download failed. Please try again.'); } };
+  const formatFileSize = (b) => { if (!b) return ''; return (b / 1048576).toFixed(1) + ' MB'; };
+  const getBreadcrumb = () => { const c = ['PYQ Hub']; if (selectedStream) c.push(selectedStream.displayName); if (selectedSpec) c.push(selectedSpec.displayName); if (selectedSem) c.push(selectedSem.displayName); if (selectedSubject) c.push(selectedSubject); if (selectedPyqYear) c.push(String(selectedPyqYear)); return c; };
+  const getTitle = () => {
+    if (currentLevel === 'streams') return 'Choose Your Stream';
+    if (currentLevel === 'specializations') return 'Choose Specialization';
+    if (currentLevel === 'semesters') return 'Choose Semester';
+    if (currentLevel === 'subjects') return 'Choose Subject';
+    if (currentLevel === 'pyqYears') return 'Select PYQ Year';
+    if (currentLevel === 'papers') return 'Papers';
+    return 'PYQ Hub';
+  };
+
+  const container = { hidden: { opacity: 0 }, visible: { opacity: 1, transition: { staggerChildren: 0.06 } } };
+  const card = { hidden: { opacity: 0, y: 20, scale: 0.95 }, visible: { opacity: 1, y: 0, scale: 1, transition: { type: 'spring', stiffness: 300, damping: 24 } }, exit: { opacity: 0, y: -20, scale: 0.95 } };
+
+  useEffect(() => {
+    if (!previewPaper) { if (previewUrl) { URL.revokeObjectURL(previewUrl); setPreviewUrl(null); } return; }
+    let cancelled = false;
+    const fetchPreview = async () => {
+      try {
+        const url = (import.meta.env.VITE_BACKEND_URL || 'http://localhost:8000') + '/api/v1/papers/' + previewPaper.id + '/download';
+        const headers = {};
+        const token = localStorage.getItem('auth_token') || localStorage.getItem('authToken');
+        if (token) headers['Authorization'] = 'Bearer ' + token;
+        const resp = await fetch(url, { headers });
+        if (!resp.ok) throw new Error('Failed to load preview');
+        const blob = await resp.blob();
+        if (!cancelled) setPreviewUrl(URL.createObjectURL(blob));
+      } catch (e) { console.error('Preview fetch failed:', e); }
+    };
+    fetchPreview();
+    return () => { cancelled = true; };
+  }, [previewPaper]);
+
+  const handleToggleBookmark = async (paperId) => {
+    const isCurrentlyBookmarked = bookmarkedPapers.has(paperId);
+    setBookmarkedPapers(prev => {
+      const next = new Set(prev);
+      if (isCurrentlyBookmarked) next.delete(paperId);
+      else next.add(paperId);
+      return next;
+    });
+    try {
+      await apiClient.toggleBookmark(paperId);
+    } catch (e) {
+      // Revert on error
+      setBookmarkedPapers(prev => {
+        const next = new Set(prev);
+        if (isCurrentlyBookmarked) next.add(paperId);
+        else next.delete(paperId);
+        return next;
+      });
     }
-  };
-
-  const handleReset = () => {
-    setCurrentLevel('years');
-    setSelectedYear(null);
-    setSelectedSemester(null);
-    setSelectedExamYear(null);
-    setSelectedStream(null);
-    setSelectedSpecialization(null);
-    setSearchTerm('');
-  };
-
-  // Render functions for different levels
-  const renderYears = () => {
-    const years = getYears();
-    return (
-      <motion.div
-        className="grid grid-cols-1 md:grid-cols-3 gap-6"
-        variants={containerVariants}
-        initial="hidden"
-        animate="visible"
-        exit="exit"
-      >
-        {years.map((year) => (
-          <motion.div
-            key={year.id}
-            variants={cardVariants}
-            whileHover="hover"
-            className="bg-white rounded-xl shadow-lg p-8 cursor-pointer border-2 border-transparent hover:border-blue-500 transition-colors"
-            onClick={() => handleYearSelect(year)}
-          >
-            <div className="text-center">
-              <div className="w-16 h-16 bg-gradient-to-r from-blue-500 to-purple-600 rounded-full flex items-center justify-center mx-auto mb-4">
-                <GraduationCap className="w-8 h-8 text-white" />
-              </div>
-              <h3 className="text-2xl font-bold text-gray-800 mb-2">{year.displayName}</h3>
-              <p className="text-gray-600">Semesters {year.semesters.map(s => s.displayName.split(' ')[1]).join(', ')}</p>
-            </div>
-          </motion.div>
-        ))}
-      </motion.div>
-    );
-  };
-
-  const renderSemesters = () => {
-    const semesters = getSemesters(selectedYear.id);
-    return (
-      <motion.div
-        className="grid grid-cols-1 md:grid-cols-2 gap-6"
-        variants={containerVariants}
-        initial="hidden"
-        animate="visible"
-        exit="exit"
-      >
-        {semesters.map((semester) => (
-          <motion.div
-            key={semester.id}
-            variants={cardVariants}
-            whileHover="hover"
-            className="bg-white rounded-xl shadow-lg p-8 cursor-pointer border-2 border-transparent hover:border-green-500 transition-colors"
-            onClick={() => handleSemesterSelect(semester)}
-          >
-            <div className="text-center">
-              <div className="w-16 h-16 bg-gradient-to-r from-green-500 to-teal-600 rounded-full flex items-center justify-center mx-auto mb-4">
-                <BookOpen className="w-8 h-8 text-white" />
-              </div>
-              <h3 className="text-2xl font-bold text-gray-800 mb-2">{semester.displayName}</h3>
-              <p className="text-gray-600">{semester.name}</p>
-            </div>
-          </motion.div>
-        ))}
-      </motion.div>
-    );
-  };
-
-  const renderExamYears = () => {
-    const examYears = getExamYears();
-    return (
-      <motion.div
-        className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4"
-        variants={containerVariants}
-        initial="hidden"
-        animate="visible"
-        exit="exit"
-      >
-        {examYears.map((year) => (
-          <motion.div
-            key={year}
-            variants={cardVariants}
-            whileHover="hover"
-            className="bg-white rounded-xl shadow-lg p-6 cursor-pointer border-2 border-transparent hover:border-orange-500 transition-colors"
-            onClick={() => handleExamYearSelect(year)}
-          >
-            <div className="text-center">
-              <div className="w-12 h-12 bg-gradient-to-r from-orange-500 to-red-600 rounded-full flex items-center justify-center mx-auto mb-3">
-                <Calendar className="w-6 h-6 text-white" />
-              </div>
-              <h3 className="text-xl font-bold text-gray-800">{year}</h3>
-            </div>
-          </motion.div>
-        ))}
-      </motion.div>
-    );
   };
 
   const renderStreams = () => {
-    const streams = getStreams();
-    return (
-      <motion.div
-        className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6"
-        variants={containerVariants}
-        initial="hidden"
-        animate="visible"
-        exit="exit"
-      >
-        {Object.entries(streams).map(([key, stream]) => (
-          <motion.div
-            key={key}
-            variants={cardVariants}
-            whileHover="hover"
-            className="bg-white rounded-xl shadow-lg p-6 cursor-pointer border-2 border-transparent hover:border-purple-500 transition-colors"
-            onClick={() => handleStreamSelect(key, stream)}
-          >
-            <div className="text-center">
-              <div className="text-4xl mb-4">{stream.displayName.split(' ')[0]}</div>
-              <h3 className="text-xl font-bold text-gray-800 mb-2">{stream.displayName}</h3>
-              <p className="text-gray-600 text-sm">
-                {Object.keys(stream.specializations).length} specialization{Object.keys(stream.specializations).length > 1 ? 's' : ''}
-              </p>
-            </div>
-          </motion.div>
-        ))}
-      </motion.div>
-    );
+    const s = getStreams();
+    return (<motion.div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6" variants={container} initial="hidden" animate="visible" exit="exit">
+      {Object.entries(s).map(([k, v]) => { const unlocked = isUnlocked(k); return (<motion.div key={k} variants={card} className={"card-nav p-8 cursor-pointer text-center " + (!unlocked ? "opacity-40" : "")} onClick={() => unlocked && handleStreamSelect(k, v)}>
+        <div className="text-5xl mb-4">{v.icon}</div>
+        <h3 className="text-2xl font-bold text-white mb-2">{v.displayName}</h3>
+        <p className="text-gray-400 text-sm">{Object.keys(v.specializations).length} specialization{Object.keys(v.specializations).length > 1 ? 's' : ''}</p>{!isUnlocked(k) && <div className="mt-2 text-xs bg-gray-700 text-gray-400 px-2 py-0.5 rounded-full inline-block">🔒 Coming Soon</div>}</motion.div>);})}
+    </motion.div>);
   };
-
   const renderSpecializations = () => {
-    const specializations = getSpecializations(selectedStream.key);
-    return (
-      <motion.div
-        className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6"
-        variants={containerVariants}
-        initial="hidden"
-        animate="visible"
-        exit="exit"
-      >
-        {Object.entries(specializations).map(([key, specialization]) => (
-          <motion.div
-            key={key}
-            variants={cardVariants}
-            whileHover="hover"
-            className="bg-white rounded-xl shadow-lg p-6 cursor-pointer border-2 border-transparent hover:border-indigo-500 transition-colors"
-            onClick={() => handleSpecializationSelect(key, specialization)}
-          >
-            <div className="text-center">
-              <div className="w-16 h-16 bg-gradient-to-r from-indigo-500 to-purple-600 rounded-full flex items-center justify-center mx-auto mb-4">
-                <GraduationCap className="w-8 h-8 text-white" />
-              </div>
-              <h3 className="text-xl font-bold text-gray-800 mb-2">{specialization.displayName}</h3>
-              <p className="text-gray-600 text-sm">{specialization.name}</p>
-            </div>
-          </motion.div>
-        ))}
-      </motion.div>
-    );
+    const specs = getSpecializations(selectedStream.key);
+    return (<motion.div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6" variants={container} initial="hidden" animate="visible" exit="exit">
+      {Object.entries(specs).map(([k, v]) => (<motion.div key={k} variants={card} className="card-nav p-8 cursor-pointer text-center" onClick={() => handleSpecSelect(k, v)}>
+        <div className="w-16 h-16 bg-gradient-to-r from-indigo-500 to-blue-600 rounded-full flex items-center justify-center mx-auto mb-4"><GraduationCap className="w-8 h-8 text-white" /></div>
+        <h3 className="text-xl font-bold text-white mb-2">{v.displayName}</h3>
+        <p className="text-gray-400 text-sm">{v.name}</p>
+      </motion.div>))}
+    </motion.div>);
   };
-
+  const renderSemesters = () => {
+    const sems = getSemesters(selectedStream.key, selectedSpec.key);
+    const opts = getSemesterOptions();
+    return (<motion.div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-4" variants={container} initial="hidden" animate="visible" exit="exit">
+      {opts.map((s) => { const has = sems[s.id] && sems[s.id].length > 0; return (
+        <motion.div key={s.id} variants={card} className={`card-nav p-6 cursor-pointer text-center ${!has ? 'opacity-40' : ''}`} onClick={() => has && handleSemSelect(s)}>
+          <div className="w-14 h-14 bg-gradient-to-r from-green-500 to-teal-600 rounded-full flex items-center justify-center mx-auto mb-3"><BookOpen className="w-7 h-7 text-white" /></div>
+          <h3 className="text-xl font-bold text-white mb-1">{s.displayName}</h3>
+          <p className="text-gray-400 text-xs">{has ? sems[s.id].length + ' subjects' : 'No subjects'}</p>
+        </motion.div>); })}
+    </motion.div>);
+  };
   const renderSubjects = () => {
-    const subjects = getSubjects(selectedStream.key, selectedSpecialization.key, selectedSemester.id);
-    const filteredSubjects = subjects.filter(subject => 
-      subject.toLowerCase().includes(searchTerm.toLowerCase())
-    );
-    
-    // Mock paper data for each subject
-    const mockPapers = {
-      'Data Structures': [
-        { id: 1, title: 'Data Structures - Mid Term 2023', year: '2023', type: 'Mid Term', pages: 8, downloads: 1250, rating: 4.8, size: '2.3 MB' },
-        { id: 2, title: 'Data Structures - Final Exam 2023', year: '2023', type: 'Final', pages: 12, downloads: 2100, rating: 4.9, size: '3.1 MB' },
-        { id: 3, title: 'Data Structures - Practice Set 2023', year: '2023', type: 'Practice', pages: 15, downloads: 890, rating: 4.7, size: '2.8 MB' }
-      ],
-      'Algorithms': [
-        { id: 4, title: 'Algorithms - Mid Term 2023', year: '2023', type: 'Mid Term', pages: 10, downloads: 980, rating: 4.6, size: '2.5 MB' },
-        { id: 5, title: 'Algorithms - Final Exam 2023', year: '2023', type: 'Final', pages: 14, downloads: 1650, rating: 4.8, size: '3.4 MB' }
-      ],
-      'Database Systems': [
-        { id: 6, title: 'Database Systems - Mid Term 2023', year: '2023', type: 'Mid Term', pages: 9, downloads: 1100, rating: 4.7, size: '2.1 MB' },
-        { id: 7, title: 'Database Systems - Final Exam 2023', year: '2023', type: 'Final', pages: 13, downloads: 1800, rating: 4.9, size: '3.2 MB' }
-      ]
-    };
-
-    return (
-      <motion.div
-        className="space-y-8"
-        variants={containerVariants}
-        initial="hidden"
-        animate="visible"
-        exit="exit"
-      >
-        {filteredSubjects.map((subject, index) => {
-          const papers = mockPapers[subject] || [
-            { id: index + 100, title: `${subject} - Sample Paper`, year: '2023', type: 'Sample', pages: 8, downloads: 500, rating: 4.5, size: '2.0 MB' }
-          ];
-          
-          return (
-            <motion.div
-              key={subject}
-              variants={cardVariants}
-              className="bg-white rounded-2xl shadow-xl border border-gray-200 overflow-hidden"
-            >
-              {/* Subject Header */}
-              <div className="bg-gradient-to-r from-indigo-500 to-purple-600 p-6 text-white">
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center space-x-4">
-                    <div className="w-12 h-12 bg-white/20 rounded-xl flex items-center justify-center">
-                      <span className="text-2xl">📖</span>
-                    </div>
-                    <div>
-                      <h3 className="text-2xl font-bold">{subject}</h3>
-                      <p className="text-indigo-100">
-                        {selectedYear?.displayName} • {selectedSemester?.displayName} • {selectedExamYear}
-                      </p>
-                    </div>
-                  </div>
-                  <div className="text-right">
-                    <div className="text-2xl font-bold">{papers.length}</div>
-                    <div className="text-indigo-100 text-sm">Papers Available</div>
-                  </div>
-                </div>
-              </div>
-              
-              {/* Papers List */}
-              <div className="p-6">
-                <div className="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 gap-4">
-                  {papers.map((paper) => (
-                    <motion.div
-                      key={paper.id}
-                      className="group bg-gradient-to-br from-gray-50 to-white border border-gray-200 rounded-xl p-4 hover:shadow-lg transition-all duration-300 cursor-pointer"
-                      whileHover={{ scale: 1.02, y: -2 }}
-                      whileTap={{ scale: 0.98 }}
-                    >
-                      <div className="flex items-start justify-between mb-3">
-                        <div className="flex-1">
-                          <h4 className="font-semibold text-gray-900 mb-1 group-hover:text-indigo-600 transition-colors">
-                            {paper.title}
-                          </h4>
-                          <div className="flex items-center space-x-2 text-xs text-gray-500">
-                            <span className={`px-2 py-1 rounded-full ${
-                              paper.type === 'Final' ? 'bg-red-100 text-red-600' :
-                              paper.type === 'Mid Term' ? 'bg-blue-100 text-blue-600' :
-                              'bg-green-100 text-green-600'
-                            }`}>
-                              {paper.type}
-                            </span>
-                            <span>{paper.year}</span>
-                          </div>
-                        </div>
-                        <div className="flex items-center space-x-1 text-yellow-500">
-                          <span className="text-sm">⭐</span>
-                          <span className="text-sm font-medium text-gray-700">{paper.rating}</span>
-                        </div>
-                      </div>
-                      
-                      <div className="flex items-center justify-between text-xs text-gray-500 mb-4">
-                        <div className="flex items-center space-x-3">
-                          <span className="flex items-center space-x-1">
-                            <span>📄</span>
-                            <span>{paper.pages} pages</span>
-                          </span>
-                          <span className="flex items-center space-x-1">
-                            <span>💾</span>
-                            <span>{paper.size}</span>
-                          </span>
-                        </div>
-                        <span className="flex items-center space-x-1">
-                          <span>⬇️</span>
-                          <span>{paper.downloads.toLocaleString()}</span>
-                        </span>
-                      </div>
-                      
-                      <div className="flex space-x-2">
-                        <motion.button
-                          className="flex-1 bg-gradient-to-r from-indigo-600 to-purple-600 text-white py-2 px-3 rounded-lg text-sm font-medium hover:from-indigo-700 hover:to-purple-700 transition-all flex items-center justify-center space-x-1"
-                          whileHover={{ scale: 1.02 }}
-                          whileTap={{ scale: 0.98 }}
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            alert(`Downloading ${paper.title}...`);
-                          }}
-                        >
-                          <span>⬇️</span>
-                          <span>Download</span>
-                        </motion.button>
-                        <motion.button
-                          className="px-3 py-2 border border-gray-300 text-gray-700 rounded-lg text-sm hover:bg-gray-50 transition-colors"
-                          whileHover={{ scale: 1.02 }}
-                          whileTap={{ scale: 0.98 }}
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            alert(`Previewing ${paper.title}...`);
-                          }}
-                        >
-                          👁️
-                        </motion.button>
-                        <motion.button
-                          className="px-3 py-2 border border-gray-300 text-gray-700 rounded-lg text-sm hover:bg-gray-50 transition-colors"
-                          whileHover={{ scale: 1.02 }}
-                          whileTap={{ scale: 0.98 }}
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            alert(`Added ${paper.title} to favorites!`);
-                          }}
-                        >
-                          ❤️
-                        </motion.button>
-                      </div>
-                    </motion.div>
-                  ))}
-                </div>
-                
-                {/* Load More Button */}
-                <div className="text-center mt-6">
-                  <motion.button
-                    className="px-6 py-3 bg-gradient-to-r from-gray-100 to-gray-200 text-gray-700 rounded-xl font-medium hover:from-gray-200 hover:to-gray-300 transition-all flex items-center space-x-2 mx-auto"
-                    whileHover={{ scale: 1.02 }}
-                    whileTap={{ scale: 0.98 }}
-                  >
-                    <span>📚</span>
-                    <span>Load More Papers</span>
-                  </motion.button>
-                </div>
-              </div>
-            </motion.div>
-          );
-        })}
-      </motion.div>
-    );
+    const subs = getSubjects(selectedStream.key, selectedSpec.key, selectedSem.id);
+    const filtered = subs.filter(s => s.toLowerCase().includes(searchTerm.toLowerCase()));
+    return (<motion.div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4" variants={container} initial="hidden" animate="visible" exit="exit">
+      {filtered.map((s) => (<motion.div key={s} variants={card} className="card-nav p-6 cursor-pointer flex items-center gap-4" onClick={() => handleSubjectSelect(s)}>
+        <div className="w-12 h-12 bg-gradient-to-r from-blue-500 to-cyan-600 rounded-full flex items-center justify-center flex-shrink-0"><FileText className="w-6 h-6 text-white" /></div>
+        <div><h3 className="text-lg font-bold text-white">{s}</h3><p className="text-gray-400 text-sm">View PYQ papers</p></div>
+      </motion.div>))}
+      {filtered.length === 0 && <p className="text-gray-400 text-center col-span-full py-8">No subjects match your search.</p>}
+    </motion.div>);
+  };
+  const renderPyqYears = () => {
+    const years = getPyqYears();
+    return (<motion.div className="grid grid-cols-3 sm:grid-cols-5 lg:grid-cols-9 gap-3" variants={container} initial="hidden" animate="visible" exit="exit">
+      {years.map((y) => (<motion.div key={y} variants={card} className="card-nav p-5 cursor-pointer text-center" onClick={() => handleYearSelect(y)}>
+        <div className="w-12 h-12 bg-gradient-to-r from-orange-500 to-red-600 rounded-full flex items-center justify-center mx-auto mb-2"><Calendar className="w-6 h-6 text-white" /></div>
+        <h3 className="text-lg font-bold text-white">{y}</h3>
+      </motion.div>))}
+    </motion.div>);
   };
 
-  const getCurrentTitle = () => {
-    switch (currentLevel) {
-      case 'years': return 'Select Academic Year';
-      case 'semesters': return `Select Semester - ${selectedYear?.displayName}`;
-      case 'examYears': return `Select Exam Year - ${selectedSemester?.displayName}`;
-      case 'streams': return `Select Stream - ${selectedExamYear}`;
-      case 'specializations': return `Select Specialization - ${selectedStream?.displayName}`;
-      case 'subjects': return `Select Subject - ${selectedSpecialization?.displayName}`;
-      default: return 'PYQ Navigator';
-    }
+  const renderPapers = () => {
+    if (isLoadingPapers) return (<div className="flex justify-center items-center py-16"><div className="animate-spin rounded-full h-10 w-10 border-b-2 border-brand-500"></div><span className="ml-4 text-gray-400">Loading papers...</span></div>);
+    return (
+      <motion.div className="space-y-6" variants={container} initial="hidden" animate="visible" exit="exit">
+        <motion.div variants={card} className="bg-gradient-to-r from-indigo-500 to-blue-600 rounded-2xl p-6 text-white">
+          <div className="flex items-center justify-between">
+            <div><h3 className="text-2xl font-bold">{selectedSubject}</h3><p className="text-indigo-100">{selectedStream?.displayName} / {selectedSpec?.displayName} / {selectedSem?.displayName} / {selectedPyqYear}</p></div>
+            <div className="text-right"><div className="text-2xl font-bold">{papers.length}</div><div className="text-indigo-100 text-sm">Papers</div></div>
+          </div>
+        </motion.div>
+        {paperError && <div className="bg-yellow-500/10 border border-yellow-500/30 rounded-xl p-4"><p className="text-yellow-400">{paperError}</p></div>}
+        {papers.length === 0 && !paperError ? (
+          <div className="text-center py-12 bg-white/5 rounded-xl"><FileText className="h-16 w-16 text-gray-500 mx-auto mb-4" /><h3 className="text-xl font-semibold text-white mb-2">No Papers Yet</h3><p className="text-gray-400">No question papers available for this selection. Be the first to upload!</p></div>
+        ) : (
+          <div className="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 gap-4">
+            {papers.map((p) => (
+              <SpotlightCard key={p.id} className="group bg-white/5 border border-white/10 rounded-xl p-4" spotlightColor="rgba(99,102,241,0.1)">
+                <motion.div variants={card}>
+                  <h4 className="font-semibold text-white mb-2 group-hover:text-indigo-300 transition-colors line-clamp-2">{p.title}</h4>
+                  <div className="flex items-center gap-3 text-xs text-gray-400 mb-3">
+                    <span className="bg-blue-500/20 text-blue-400 px-2 py-1 rounded">{p.exam_type || 'Exam'}</span>
+                    <span>{p.year}</span>
+                    {p.file_size && <span>{formatFileSize(p.file_size)}</span>}
+                  </div>
+                  <div className="flex gap-2">
+                    <MagneticButton className="btn btn-sm btn-primary flex-1 justify-center" onClick={(e) => { e.stopPropagation(); handleDownload(p); }}><Download className="h-4 w-4" /> <span>Download</span></MagneticButton>
+                    <button className="btn btn-icon btn-sm btn-secondary" onClick={(e) => { e.stopPropagation(); setPreviewPaper(p); }}><Eye className="h-4 w-4" /></button>
+                    <button className={`btn btn-icon btn-sm ${bookmarkedPapers.has(p.id) ? 'text-red-400' : 'btn-ghost'}`} onClick={(e) => { e.stopPropagation(); handleToggleBookmark(p.id); }} aria-label={bookmarkedPapers.has(p.id) ? 'Remove bookmark' : 'Add bookmark'}><Heart className={`h-4 w-4 ${bookmarkedPapers.has(p.id) ? 'fill-current' : ''}`} /></button>
+                  </div>
+                </motion.div>
+              </SpotlightCard>
+            ))}
+          </div>
+        )}
+      </motion.div>
+    );
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-blue-50 via-white to-purple-50 py-8">
+    <div className="min-h-screen py-8">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-        {/* Header */}
         <div className="text-center mb-8">
-          <motion.h1 
-            className="text-4xl md:text-5xl font-bold bg-gradient-to-r from-blue-600 to-purple-600 bg-clip-text text-transparent mb-4"
-            initial={{ opacity: 0, y: -20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.6 }}
-          >
-            PYQ Navigator
-          </motion.h1>
-          <motion.p 
-            className="text-xl text-gray-600 max-w-3xl mx-auto"
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.6, delay: 0.2 }}
-          >
-            Navigate through years, semesters, and streams to find your Previous Year Question papers
-          </motion.p>
+          <motion.h1 className="text-4xl md:text-5xl font-bold bg-gradient-to-r from-cyan-200 to-blue-200 bg-clip-text text-transparent mb-4" initial={{ opacity: 0, y: -20 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.6 }}>PYQ Hub</motion.h1>
+          <motion.p className="text-xl text-gray-400 max-w-3xl mx-auto" initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.6, delay: 0.2 }}>Browse Osmania University previous year question papers by stream, subject, and year</motion.p>
         </div>
-
-        {/* Navigation Controls */}
-        <div className="flex flex-col md:flex-row justify-between items-center mb-8 gap-4">
-          <div className="flex items-center gap-4">
-            {currentLevel !== 'years' && (
-              <motion.button
-                onClick={handleBack}
-                className="flex items-center gap-2 px-4 py-2 bg-gray-100 hover:bg-gray-200 rounded-lg transition-colors"
-                whileHover={{ scale: 1.05 }}
-                whileTap={{ scale: 0.95 }}
-              >
-                <ChevronLeft className="w-4 h-4" />
-                Back
-              </motion.button>
-            )}
-            <motion.button
-              onClick={handleReset}
-              className="px-4 py-2 bg-red-100 hover:bg-red-200 text-red-700 rounded-lg transition-colors"
-              whileHover={{ scale: 1.05 }}
-              whileTap={{ scale: 0.95 }}
-            >
-              Reset
-            </motion.button>
+        <div className="flex flex-col md:flex-row justify-between items-center mb-6 gap-4">
+          <div className="flex items-center gap-3">
+            {currentLevel !== 'streams' && <button onClick={handleBack} className="btn btn-sm btn-secondary flex items-center gap-2"><ChevronLeft className="w-4 h-4" /> Back</button>}
+            <button onClick={handleReset} className="btn btn-sm btn-danger">Reset</button>
           </div>
-
-          {/* Search and Filter */}
-          <div className="flex items-center gap-4">
-            {currentLevel === 'subjects' && (
-              <div className="relative">
-                <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4" />
-                <input
-                  type="text"
-                  placeholder="Search subjects..."
-                  value={searchTerm}
-                  onChange={(e) => setSearchTerm(e.target.value)}
-                  className="pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                />
-              </div>
-            )}
-            <motion.button
-              onClick={() => setShowFilters(!showFilters)}
-              className="flex items-center gap-2 px-4 py-2 bg-blue-100 hover:bg-blue-200 text-blue-700 rounded-lg transition-colors"
-              whileHover={{ scale: 1.05 }}
-              whileTap={{ scale: 0.95 }}
-            >
-              <Filter className="w-4 h-4" />
-              Filters
-            </motion.button>
-          </div>
+          {currentLevel === 'subjects' && <div className="relative"><Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 w-4 h-4" /><input type="text" placeholder="Search subjects..." value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} className="pl-10 pr-4 py-2 border border-white/15 rounded-lg bg-white/5 text-white placeholder-gray-500 focus:ring-2 focus:ring-brand-500" /></div>}
         </div>
-
-        {/* Breadcrumb */}
-        {getBreadcrumb().length > 0 && (
-          <motion.div 
-            className="flex items-center gap-2 mb-6 text-sm text-gray-600"
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-          >
-            <span>Navigation:</span>
-            {getBreadcrumb().map((item, index) => (
-              <React.Fragment key={index}>
-                <span className="font-medium">{item}</span>
-                {index < getBreadcrumb().length - 1 && <span>→</span>}
-              </React.Fragment>
-            ))}
-          </motion.div>
-        )}
-
-        {/* Current Level Title */}
-        <motion.h2 
-          className="text-2xl md:text-3xl font-bold text-gray-800 text-center mb-8"
-          key={currentLevel}
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.4 }}
-        >
-          {getCurrentTitle()}
-        </motion.h2>
-
-        {/* Content */}
+        <div className="flex items-center gap-2 mb-6 text-sm text-gray-400 flex-wrap">
+          {getBreadcrumb().map((item, i) => (<React.Fragment key={i}>{i > 0 && <ChevronRight className="w-3 h-3" />}<span className={i === getBreadcrumb().length - 1 ? 'font-medium text-white' : ''}>{item}</span></React.Fragment>))}
+        </div>
+        <motion.h2 className="text-2xl md:text-3xl font-bold text-white text-center mb-8" key={currentLevel} initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.3 }}>{getTitle()}</motion.h2>
         <AnimatePresence mode="wait">
-          <motion.div key={currentLevel}>
-            {currentLevel === 'years' && renderYears()}
-            {currentLevel === 'semesters' && renderSemesters()}
-            {currentLevel === 'examYears' && renderExamYears()}
-            {currentLevel === 'streams' && renderStreams()}
-            {currentLevel === 'specializations' && renderSpecializations()}
-            {currentLevel === 'subjects' && renderSubjects()}
-          </motion.div>
+          {currentLevel === 'streams' && renderStreams()}
+          {currentLevel === 'specializations' && renderSpecializations()}
+          {currentLevel === 'semesters' && renderSemesters()}
+          {currentLevel === 'subjects' && renderSubjects()}
+          {currentLevel === 'pyqYears' && renderPyqYears()}
+          {currentLevel === 'papers' && renderPapers()}
         </AnimatePresence>
       </div>
+      {previewPaper && (
+        <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/80 backdrop-blur-sm p-0 sm:p-4" onClick={() => setPreviewPaper(null)}>
+          <div className="relative bg-gray-900 rounded-t-2xl sm:rounded-2xl border border-white/20 shadow-2xl w-full max-w-4xl h-[85vh] sm:h-[85vh] mx-0 sm:mx-4 flex flex-col" onClick={(e) => e.stopPropagation()}>
+            <div className="flex items-center justify-between px-6 py-4 border-b border-white/10"><h3 className="text-white font-semibold text-lg truncate">{previewPaper.title}</h3><button onClick={() => setPreviewPaper(null)} className="text-gray-400 hover:text-white text-2xl leading-none px-2">&times;</button></div>
+            <div className="flex-1 overflow-hidden rounded-b-2xl"><iframe src={previewUrl || ''} className="w-full h-full border-0" title={previewPaper.title} /></div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };
-
 export default PYQNavigator;

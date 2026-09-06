@@ -9,7 +9,6 @@ import {
   PhotoIcon,
   PaperClipIcon,
 } from '@heroicons/react/24/outline';
-
 const ReportIssuePage = () => {
   const [formData, setFormData] = useState({
     title: '',
@@ -26,7 +25,6 @@ const ReportIssuePage = () => {
   });
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [submitStatus, setSubmitStatus] = useState(null);
-
   const handleInputChange = (e) => {
     const { name, value } = e.target;
     setFormData(prev => ({
@@ -34,7 +32,6 @@ const ReportIssuePage = () => {
       [name]: value
     }));
   };
-
   const handleFileChange = (e) => {
     const files = Array.from(e.target.files);
     setFormData(prev => ({
@@ -42,22 +39,18 @@ const ReportIssuePage = () => {
       attachments: [...prev.attachments, ...files]
     }));
   };
-
   const removeAttachment = (index) => {
     setFormData(prev => ({
       ...prev,
       attachments: prev.attachments.filter((_, i) => i !== index)
     }));
   };
-
   const handleSubmit = async (e) => {
     e.preventDefault();
     setIsSubmitting(true);
-    
     try {
       // TODO: Replace with actual API call
       await new Promise(resolve => setTimeout(resolve, 2000));
-      
       console.log('Issue report submitted:', formData);
       setSubmitStatus('success');
       setFormData({
@@ -81,35 +74,30 @@ const ReportIssuePage = () => {
       setTimeout(() => setSubmitStatus(null), 5000);
     }
   };
-
   const categories = [
-    { value: 'bug', label: 'Bug Report', icon: BugAntIcon, description: 'Something is not working as expected' },
-    { value: 'feature', label: 'Feature Request', icon: DocumentTextIcon, description: 'Suggest a new feature or improvement' },
-    { value: 'performance', label: 'Performance Issue', icon: DevicePhoneMobileIcon, description: 'Slow loading or poor performance' },
-    { value: 'ui', label: 'UI/UX Issue', icon: PhotoIcon, description: 'Design or user experience problems' },
-    { value: 'content', label: 'Content Issue', icon: DocumentTextIcon, description: 'Problems with papers or content quality' },
-    { value: 'other', label: 'Other', icon: ExclamationTriangleIcon, description: 'Other issues not covered above' }
+    { value: 'bug', label: 'Bug Report', icon: BugAntIcon, description: 'A feature or function is broken or behaving incorrectly' },
+    { value: 'feature', label: 'Feature Request', icon: DocumentTextIcon, description: 'Propose something new or an improvement to existing features' },
+    { value: 'performance', label: 'Performance Issue', icon: DevicePhoneMobileIcon, description: 'The site is loading slowly or performing poorly' },
+    { value: 'ui', label: 'UI/UX Issue', icon: PhotoIcon, description: 'Something looks wrong or is confusing to use' },
+    { value: 'content', label: 'Content Issue', icon: DocumentTextIcon, description: 'Issues with uploaded papers, extracted data, or content' },
+    { value: 'other', label: 'Other', icon: ExclamationTriangleIcon, description: 'Anything else that needs our attention' }
   ];
-
   const priorities = [
     { value: 'low', label: 'Low', color: 'text-green-400', description: 'Minor issue, no rush' },
     { value: 'medium', label: 'Medium', color: 'text-yellow-400', description: 'Moderate impact' },
     { value: 'high', label: 'High', color: 'text-orange-400', description: 'Significant impact' },
     { value: 'critical', label: 'Critical', color: 'text-red-400', description: 'Blocking or severe issue' }
   ];
-
   // Auto-detect browser and device info
   React.useEffect(() => {
     const browserInfo = `${navigator.userAgent}`;
     const deviceInfo = `Screen: ${screen.width}x${screen.height}, Platform: ${navigator.platform}`;
-    
     setFormData(prev => ({
       ...prev,
       browserInfo,
       deviceInfo
     }));
   }, []);
-
   return (
     <div className="min-h-screen bg-gradient-to-br from-bg-dark via-slate-900 to-bg-dark">
       {/* Hero Section */}
@@ -128,10 +116,9 @@ const ReportIssuePage = () => {
               Report an <span className="text-transparent bg-clip-text bg-gradient-to-r from-brand-500 to-accent-500">Issue</span>
             </h1>
             <p className="text-xl text-gray-300 max-w-3xl mx-auto">
-              Help us improve SmartPYQ by reporting bugs, suggesting features, or letting us know about any problems you encounter.
+              Help us make SmartPYQ better by reporting bugs, suggesting improvements, or letting us know about issues you encounter.
             </p>
           </motion.div>
-
           {/* Issue Categories */}
           <motion.div
             initial={{ opacity: 0, y: 20 }}
@@ -139,7 +126,7 @@ const ReportIssuePage = () => {
             transition={{ duration: 0.6, delay: 0.2 }}
             className="mb-12"
           >
-            <h2 className="text-2xl font-bold text-white mb-6 text-center">What type of issue are you reporting?</h2>
+            <h2 className="text-2xl font-bold text-white mb-6 text-center">What kind of problem are you reporting?</h2>
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
               {categories.map((category) => {
                 const IconComponent = category.icon;
@@ -151,8 +138,6 @@ const ReportIssuePage = () => {
                         ? 'border-brand-500 bg-brand-500/10'
                         : 'border-slate-700 bg-slate-800/50 hover:border-slate-600'
                     }`}
-                    whileHover={{ scale: 1.02 }}
-                    whileTap={{ scale: 0.98 }}
                   >
                     <input
                       type="radio"
@@ -180,7 +165,6 @@ const ReportIssuePage = () => {
               })}
             </div>
           </motion.div>
-
           {/* Report Form */}
           <motion.div
             initial={{ opacity: 0, y: 20 }}
@@ -203,10 +187,9 @@ const ReportIssuePage = () => {
                     onChange={handleInputChange}
                     required
                     className="w-full px-4 py-3 bg-slate-700/50 border border-slate-600 rounded-lg text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-brand-500 focus:border-transparent transition-all duration-200"
-                    placeholder="Brief description of the issue"
+                    placeholder="Give your issue a short title"
                   />
                 </div>
-                
                 <div>
                   <label htmlFor="priority" className="block text-sm font-medium text-gray-300 mb-2">
                     Priority *
@@ -227,7 +210,6 @@ const ReportIssuePage = () => {
                   </select>
                 </div>
               </div>
-
               {/* Description */}
               <div>
                 <label htmlFor="description" className="block text-sm font-medium text-gray-300 mb-2">
@@ -241,10 +223,9 @@ const ReportIssuePage = () => {
                   required
                   rows={4}
                   className="w-full px-4 py-3 bg-slate-700/50 border border-slate-600 rounded-lg text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-brand-500 focus:border-transparent transition-all duration-200 resize-vertical"
-                  placeholder="Provide a detailed description of the issue..."
+                  placeholder="What happened? How did you encounter this issue? Include any relevant details..."
                 />
               </div>
-
               {/* Steps to Reproduce (for bugs) */}
               {formData.category === 'bug' && (
                 <div>
@@ -262,7 +243,6 @@ const ReportIssuePage = () => {
                   />
                 </div>
               )}
-
               {/* Expected vs Actual Behavior (for bugs) */}
               {formData.category === 'bug' && (
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
@@ -277,10 +257,9 @@ const ReportIssuePage = () => {
                       onChange={handleInputChange}
                       rows={3}
                       className="w-full px-4 py-3 bg-slate-700/50 border border-slate-600 rounded-lg text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-brand-500 focus:border-transparent transition-all duration-200 resize-vertical"
-                      placeholder="What should happen?"
+                      placeholder="What did you expect the site to do?"
                     />
                   </div>
-                  
                   <div>
                     <label htmlFor="actualBehavior" className="block text-sm font-medium text-gray-300 mb-2">
                       Actual Behavior
@@ -292,12 +271,11 @@ const ReportIssuePage = () => {
                       onChange={handleInputChange}
                       rows={3}
                       className="w-full px-4 py-3 bg-slate-700/50 border border-slate-600 rounded-lg text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-brand-500 focus:border-transparent transition-all duration-200 resize-vertical"
-                      placeholder="What actually happens?"
+                      placeholder="What did the site do instead?"
                     />
                   </div>
                 </div>
               )}
-
               {/* System Information */}
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                 <div>
@@ -314,7 +292,6 @@ const ReportIssuePage = () => {
                     placeholder="Browser and version info (auto-detected)"
                   />
                 </div>
-                
                 <div>
                   <label htmlFor="deviceInfo" className="block text-sm font-medium text-gray-300 mb-2">
                     Device Information
@@ -330,7 +307,6 @@ const ReportIssuePage = () => {
                   />
                 </div>
               </div>
-
               {/* Contact Email */}
               <div>
                 <label htmlFor="email" className="block text-sm font-medium text-gray-300 mb-2">
@@ -343,10 +319,9 @@ const ReportIssuePage = () => {
                   value={formData.email}
                   onChange={handleInputChange}
                   className="w-full px-4 py-3 bg-slate-700/50 border border-slate-600 rounded-lg text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-brand-500 focus:border-transparent transition-all duration-200"
-                  placeholder="Your email for follow-up (optional)"
+                  placeholder="your@email.com (for follow-up only)"
                 />
               </div>
-
               {/* File Attachments */}
               <div>
                 <label className="block text-sm font-medium text-gray-300 mb-2">
@@ -363,11 +338,10 @@ const ReportIssuePage = () => {
                   />
                   <label htmlFor="file-upload" className="cursor-pointer">
                     <PaperClipIcon className="w-8 h-8 text-gray-400 mx-auto mb-2" />
-                    <p className="text-gray-400">Click to upload files or drag and drop</p>
+                    <p className="text-gray-400">Click to upload or drag files here</p>
                     <p className="text-xs text-gray-500 mt-1">PNG, JPG, PDF, TXT, LOG files up to 10MB each</p>
                   </label>
                 </div>
-                
                 {/* Attachment List */}
                 {formData.attachments.length > 0 && (
                   <div className="mt-4 space-y-2">
@@ -390,7 +364,6 @@ const ReportIssuePage = () => {
                   </div>
                 )}
               </div>
-
               {/* Submit Status */}
               {submitStatus && (
                 <motion.div
@@ -407,27 +380,23 @@ const ReportIssuePage = () => {
                     : '❌ Failed to submit report. Please try again or contact support directly.'}
                 </motion.div>
               )}
-
               {/* Submit Button */}
               <motion.button
                 type="submit"
                 disabled={isSubmitting}
-                className="w-full btn-primary py-4 text-lg font-semibold disabled:opacity-50 disabled:cursor-not-allowed"
-                whileHover={{ scale: isSubmitting ? 1 : 1.02 }}
-                whileTap={{ scale: isSubmitting ? 1 : 0.98 }}
+                className="btn btn-primary btn-block py-4 text-lg font-semibold"
               >
                 {isSubmitting ? (
                   <div className="flex items-center justify-center space-x-2">
                     <div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
-                    <span>Submitting Report...</span>
+                    <span>Submitting...</span>
                   </div>
                 ) : (
-                  'Submit Issue Report'
+                  'Submit Report'
                 )}
               </motion.button>
             </form>
           </motion.div>
-
           {/* Help Text */}
           <motion.div
             initial={{ opacity: 0, y: 20 }}
@@ -447,5 +416,4 @@ const ReportIssuePage = () => {
     </div>
   );
 };
-
 export default ReportIssuePage;

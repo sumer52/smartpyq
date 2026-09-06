@@ -9,6 +9,9 @@ import hashlib
 from typing import Optional, List, Dict, Any, Tuple
 from datetime import datetime
 from pathlib import Path
+import logging
+
+logger = logging.getLogger(__name__)
 
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import and_, or_
@@ -20,7 +23,7 @@ from app.core.exceptions import (
     PermissionError,
     ConflictError
 )
-from app.models.paper import Paper, PaperStatus, ExamType, PaperVersion
+from app.models.paper import Paper, PaperStatus, PaperVersion
 from app.models.user import User, UserRole
 from app.models.audit_log import AuditAction, AuditSeverity
 from app.repositories.paper_repository import PaperRepository
@@ -34,9 +37,9 @@ from app.schemas.paper import (
     PaperVersionResponse
 )
 from app.utils.storage import StorageService
-from app.utils.cache import CacheService
+from app.services.cache_service import CacheService
 from app.utils.pdf import PDFProcessor
-from app.workers.tasks import process_paper_upload
+
 
 
 class PaperService:
@@ -44,14 +47,14 @@ class PaperService:
     
     def __init__(
         self,
-        db: AsyncSession,
+        db: Optional[AsyncSession] = None,
         storage_service: Optional[StorageService] = None,
         cache_service: Optional[CacheService] = None,
         pdf_processor: Optional[PDFProcessor] = None
     ):
         self.db = db
-        self.paper_repo = PaperRepository(db)
-        self.audit_repo = AuditLogRepository(db)
+        self.paper_repo = PaperRepository(db) if db else None
+        self.audit_repo = AuditLogRepository(db) if db else None
         self.storage_service = storage_service
         self.cache_service = cache_service
         self.pdf_processor = pdf_processor
@@ -85,8 +88,15 @@ class PaperService:
         if paper_data.tags and len(paper_data.tags) > 20:
             raise ValidationError("Maximum 20 tags allowed")
         
+        # Normalize metadata (fix spelling, standardize names)
+        from app.utils.metadata_normalizer import normalize_metadata
+        meta_dict = paper_data.dict(exclude={'tenant_id'})
+        meta_dict, corrections = normalize_metadata(meta_dict)
+        if corrections:
+            logger.info(f"Metadata corrections applied for paper: {[c['field'] + ': ' + c['original'] + ' -> ' + c['corrected'] for c in corrections]}")
+        
         # Create paper
-        paper_dict = paper_data.dict(exclude={'tenant_id'})
+        paper_dict = meta_dict
         paper_dict.update({
             'tenant_id': paper_data.tenant_id or uploader.tenant_id,
             'uploader_id': uploader.id,
@@ -98,7 +108,7 @@ class PaperService:
         
         # Log audit event
         await self._log_audit(
-            AuditAction.PAPER_CREATE,
+            AuditAction.PAPER_CREATED,
             actor_id=uploader.id,
             target_type="paper",
             target_id=paper.id,
@@ -259,6 +269,9 @@ class PaperService:
     ) -> Dict[str, Any]:
         """Upload paper file and create paper record.
         
+        Accepts PDF and image files (JPG, JPEG, PNG, WEBP).
+        For images, runs OCR to extract text for search indexing.
+        
         Args:
             file_data: File content
             filename: Original filename
@@ -273,67 +286,118 @@ class PaperService:
             ValidationError: If file is invalid
             PermissionError: If user lacks permission
         """
-        # Validate file
-        if not filename.lower().endswith('.pdf'):
-            raise ValidationError("Only PDF files are allowed")
+        from app.models.paper import ProcessingStatus
+        import io
+        import os
+        
+        # Validate file - accept PDF and images
+        allowed_extensions = {'.pdf', '.jpg', '.jpeg', '.png', '.webp'}
+        file_ext = os.path.splitext(filename.lower())[1]
+        if file_ext not in allowed_extensions:
+            raise ValidationError(f"Unsupported file type. Allowed: {', '.join(sorted(allowed_extensions))}")
         
         if len(file_data) > settings.MAX_FILE_SIZE:
             raise ValidationError(f"File size exceeds {settings.MAX_FILE_SIZE} bytes")
         
-        # Validate PDF content
-        if self.pdf_processor:
-            if not await self.pdf_processor.validate_pdf(file_data):
-                raise ValidationError("Invalid PDF file")
-        
         # Generate file hash
         file_hash = hashlib.sha256(file_data).hexdigest()
         
-        # Check for duplicate files
+        # Check for duplicate files by hash (warn but allow re-upload)
         existing_version = await self.paper_repo.get_version_by_checksum(file_hash)
         if existing_version:
-            raise ConflictError("File already exists in the system")
+            logger.info(f"Duplicate file detected (checksum match), allowing re-upload")
         
         # Create paper record first
         paper = await self.create_paper(paper_data, uploader, ip_address)
         
         # Generate storage key
         file_extension = Path(filename).suffix
-        storage_key = f"papers/{paper.id}/{file_hash}{file_extension}"
+        staging_key = f"papers/{paper.id}/{file_hash}{file_extension}"
+        
+        # Determine MIME type from extension (BEFORE upload)
+        mime_type_map = {
+            '.pdf': 'application/pdf',
+            '.jpg': 'image/jpeg', '.jpeg': 'image/jpeg',
+            '.png': 'image/png', '.webp': 'image/webp',
+        }
+        content_mime = mime_type_map.get(file_ext, 'application/octet-stream')
         
         try:
-            # Upload to storage (staging area)
-            staging_key = f"staging/{storage_key}"
-            if self.storage_service:
-                await self.storage_service.upload_file(
-                    staging_key,
-                    file_data,
-                    content_type="application/pdf"
-                )
+            file_url = None
             
-            # Create paper version record
+            # Try Supabase Storage first, fallback to local filesystem
+            from app.utils.supabase_client import is_supabase_storage_enabled, get_supabase_admin
+            
+            if is_supabase_storage_enabled():
+                # Upload to Supabase Storage (with graceful fallback)
+                admin = get_supabase_admin()
+                if admin:
+                    try:
+                        user_folder = str(uploader.id)
+                        safe_filename = f"{file_hash}{file_extension}"
+                        storage_path = f"{user_folder}/{safe_filename}"
+                        
+                        admin.storage.from_(settings.SUPABASE_STORAGE_BUCKET).upload(
+                            path=storage_path,
+                            file=file_data,
+                            file_options={"content-type": content_mime}
+                        )
+                        file_url = storage_path  # Store path only; download endpoint generates signed URL
+                        staging_key = storage_path
+                        logger.info(f"File uploaded to Supabase Storage: {storage_path}")
+                    except Exception as supabase_err:
+                        logger.warning(f"Supabase Storage upload failed, falling back to local: {supabase_err}")
+                        file_url = None  # Will trigger local fallback below
+                else:
+                    logger.warning("Supabase admin client unavailable, falling back to local storage")            # Fallback: Save to local filesystem
+            if not file_url:
+                storage_base = settings.LOCAL_STORAGE_PATH or "./storage"
+                local_path = os.path.join(storage_base, staging_key)
+                os.makedirs(os.path.dirname(local_path), exist_ok=True)
+                with open(local_path, 'wb') as f:
+                    f.write(file_data)
+                file_url = f"{settings.LOCAL_STORAGE_URL or 'http://localhost:8000/files'}/{staging_key}"
+
+            # Extract text from file for search indexing
+            extracted_text = ""
+            try:
+                from app.services.document_analyzer import analyze_document
+                analysis = analyze_document(storage_path, filename)
+                if analysis.success:
+                    extracted_text = analysis.raw_text[:10000] if analysis.raw_text else ""
+            except Exception as e:
+                logger.warning(f"Text extraction failed: {e}")
+
+            # Update paper with file info and auto-approve
+            await self.paper_repo.update(
+                paper.id,
+                file_url=file_url,
+                file_name=filename,
+                file_size=len(file_data),
+                file_type=content_mime,
+                checksum=file_hash,
+                extracted_text=extracted_text,
+                processing_status=ProcessingStatus.UPLOADED,
+                status=PaperStatus.APPROVED
+            )
+            
+            # Create paper version record with storage_key for reliable file lookup
             version_data = {
                 'paper_id': paper.id,
-                's3_key': staging_key,
+                'version_number': 1,
+                's3_key': staging_key,  # e.g. "papers/5/abc123.pdf"
                 'checksum': file_hash,
                 'file_size': len(file_data),
-                'original_filename': filename,
+                'file_name': filename,
+                'uploaded_by': uploader.id,
                 'created_at': datetime.utcnow()
             }
             
             version = await self.paper_repo.create_version(**version_data)
             
-            # Queue background processing
-            if hasattr(process_paper_upload, 'delay'):
-                process_paper_upload.delay(
-                    paper_id=paper.id,
-                    version_id=version.id,
-                    staging_key=staging_key,
-                    storage_key=storage_key
-                )
-            
             # Log audit event
             await self._log_audit(
-                AuditAction.PAPER_UPLOAD,
+                AuditAction.PAPER_UPLOADED,
                 actor_id=uploader.id,
                 target_type="paper",
                 target_id=paper.id,
@@ -348,18 +412,22 @@ class PaperService:
             )
             
             return {
-                'paper_id': paper.id,
-                'version_id': version.id,
+                'id': paper.id,
+                'title': paper.title,
                 'status': 'uploaded',
-                'message': 'File uploaded successfully and queued for processing',
-                'processing': True
+                'message': 'Question paper uploaded successfully',
+                'file_url': file_url,
+                'processing_status': 'uploaded'
             }
             
         except Exception as e:
             # Clean up paper record if upload fails
-            await self.paper_repo.delete(paper.id)
+            try:
+                await self.paper_repo.delete(paper.id)
+            except:
+                pass
             raise ValidationError(f"Upload failed: {str(e)}")
-    
+
     async def approve_paper(
         self,
         paper_id: int,
@@ -396,7 +464,7 @@ class PaperService:
         updated_paper = await self.paper_repo.update(
             paper_id,
             status=PaperStatus.APPROVED,
-            approved_by=approver.id,
+            moderator_id=approver.id,
             approved_at=datetime.utcnow()
         )
         
@@ -406,7 +474,7 @@ class PaperService:
         
         # Log audit event
         await self._log_audit(
-            AuditAction.PAPER_APPROVE,
+            AuditAction.PAPER_APPROVED,
             actor_id=approver.id,
             target_type="paper",
             target_id=paper_id,
@@ -455,9 +523,7 @@ class PaperService:
         updated_paper = await self.paper_repo.update(
             paper_id,
             status=PaperStatus.REJECTED,
-            rejection_reason=reason,
-            rejected_by=rejector.id,
-            rejected_at=datetime.utcnow()
+            moderation_notes=reason
         )
         
         # Clear cache
@@ -466,7 +532,7 @@ class PaperService:
         
         # Log audit event
         await self._log_audit(
-            AuditAction.PAPER_REJECT,
+            AuditAction.PAPER_REJECTED,
             actor_id=rejector.id,
             target_type="paper",
             target_id=paper_id,
@@ -527,7 +593,7 @@ class PaperService:
         
         # Log download access
         await self._log_audit(
-            AuditAction.PAPER_DOWNLOAD,
+            AuditAction.PAPER_DOWNLOADED,
             actor_id=user.id,
             target_type="paper",
             target_id=paper_id,
@@ -570,6 +636,46 @@ class PaperService:
         versions = await self.paper_repo.get_paper_versions(paper_id)
         return [PaperVersionResponse.from_orm(version) for version in versions]
     
+    async def stamp_paper(
+        self,
+        paper_id: int,
+        user_id: int,
+        tenant_id: int,
+        client_ip: Optional[str] = None
+    ) -> Dict[str, Any]:
+        """Generate a watermarked/stamped download URL for a paper.
+        
+        Currently returns a download URL. Full watermarking can be added later.
+        """
+        paper = await self.paper_repo.get_by_id(paper_id)
+        if not paper:
+            raise NotFoundError("Paper not found")
+        
+        if paper.status != PaperStatus.APPROVED:
+            raise ValidationError("Paper is not approved for download")
+        
+        # Log the stamp request
+        await self._log_audit(
+            AuditAction.PAPER_DOWNLOADED,
+            actor_id=user_id,
+            target_type="paper",
+            target_id=paper_id,
+            tenant_id=tenant_id,
+            details=f"Stamp requested for: {paper.title}",
+            ip_address=client_ip
+        )
+        
+        import datetime as dt
+        from datetime import timedelta
+        expires = dt.datetime.utcnow() + timedelta(seconds=settings.SIGNED_URL_TTL_SECONDS)
+        
+        return {
+            "download_url": f"/api/v1/papers/{paper_id}/download",
+            "expires_at": expires,
+            "file_name": paper.file_name or f"paper_{paper_id}.pdf",
+            "file_size": paper.file_size or 0
+        }
+    
     async def delete_paper(
         self,
         paper_id: int,
@@ -605,13 +711,49 @@ class PaperService:
         
         # Delete associated files from storage
         versions = await self.paper_repo.get_paper_versions(paper_id)
+        
+        # Try Supabase Storage cleanup
+        from app.utils.supabase_client import is_supabase_storage_enabled, get_supabase_admin
+        if is_supabase_storage_enabled():
+            admin = get_supabase_admin()
+            if admin:
+                for version in versions:
+                    if version.s3_key:
+                        try:
+                            admin.storage.from_(settings.SUPABASE_STORAGE_BUCKET).remove([version.s3_key])
+                        except Exception:
+                            pass
+        
         if self.storage_service:
             for version in versions:
                 if version.s3_key:
                     try:
                         await self.storage_service.delete_file(version.s3_key)
                     except Exception:
-                        # Log but don't fail the deletion
+                        pass
+        else:
+            # Local filesystem cleanup fallback
+            import shutil
+            from app.core.config import settings
+            storage_base = settings.LOCAL_STORAGE_PATH or "./uploads"
+            paper_dir = os.path.join(storage_base, "papers", str(paper_id))
+            if os.path.isdir(paper_dir):
+                try:
+                    shutil.rmtree(paper_dir)
+                except Exception:
+                    pass
+            # Also clean up by s3_key paths
+            for version in versions:
+                if version.s3_key:
+                    try:
+                        file_path = os.path.join(storage_base, version.s3_key)
+                        if os.path.isfile(file_path):
+                            os.unlink(file_path)
+                        # Clean up parent dir if empty
+                        parent = os.path.dirname(file_path)
+                        if os.path.isdir(parent) and not os.listdir(parent):
+                            os.rmdir(parent)
+                    except Exception:
                         pass
         
         # Delete from database
@@ -623,7 +765,7 @@ class PaperService:
         
         # Log audit event
         await self._log_audit(
-            AuditAction.PAPER_DELETE,
+            AuditAction.PAPER_DELETED,
             actor_id=user.id,
             target_type="paper",
             target_id=paper_id,

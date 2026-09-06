@@ -1,193 +1,202 @@
-// Comprehensive PYQ (Previous Year Questions) Data Structure
+// SmartPYQ - Osmania University PYQ Data Structure
+// Flow: Stream -> Specialization -> Semester -> Subject -> PYQ Year -> PDF
+
+export const pyqYears = [2019, 2020, 2021, 2022, 2023, 2024, 2025, 2026, 2027];
 
 export const pyqData = {
-  years: [
-    {
-      id: 'year1',
-      name: '1st Year',
-      displayName: '1st Year',
-      semesters: [
-        { id: 'sem1', name: 'Semester 1', displayName: 'Sem 1' },
-        { id: 'sem2', name: 'Semester 2', displayName: 'Sem 2' }
-      ]
-    },
-    {
-      id: 'year2',
-      name: '2nd Year',
-      displayName: '2nd Year',
-      semesters: [
-        { id: 'sem3', name: 'Semester 3', displayName: 'Sem 3' },
-        { id: 'sem4', name: 'Semester 4', displayName: 'Sem 4' }
-      ]
-    },
-    {
-      id: 'year3',
-      name: '3rd Year',
-      displayName: '3rd Year',
-      semesters: [
-        { id: 'sem5', name: 'Semester 5', displayName: 'Sem 5' },
-        { id: 'sem6', name: 'Semester 6', displayName: 'Sem 6' }
-      ]
-    }
-  ],
-
-  examYears: [2019, 2021, 2022, 2023, 2024, 2025],
-
   streams: {
     bsc: {
-      id: 'bsc',
-      name: 'B.Sc',
-      displayName: '🎓 B.Sc',
+      id: 'bsc', name: 'B.Sc', displayName: 'B.Sc', icon: '🎓',
       specializations: {
         mscs: {
-          id: 'mscs',
-          name: 'Mathematics and Computer Science',
-          displayName: 'MSCS',
-          subjects: {
-            sem1: ['Environmental Studies', 'English', 'Hindi', 'Sanskrit', 'Telugu', 'Calculus', 'Statistics', 'Programming C/C++'],
-            sem2: ['Environmental Studies', 'English', 'Hindi', 'Sanskrit', 'Telugu', 'Linear Algebra', 'Statistics', 'Programming C/C++'],
-            sem3: ['DBMS', 'Operating Systems', 'Data Structures', 'Calculus II', 'Discrete Mathematics'],
-            sem4: ['Networks', 'Software Engineering', 'Algorithms', 'Computer Graphics', 'Web Technologies'],
-            sem5: ['Machine Learning', 'Artificial Intelligence', 'Computer Networks', 'Database Systems', 'Practical Labs'],
-            sem6: ['Web Technologies', 'Mobile Computing', 'Cloud Computing', 'Project Work', 'Practical Labs']
+          id: 'mscs', name: 'Mathematics, Statistics & Computer Science', displayName: 'MSCS',
+          semesters: {
+            sem1: ['Mathematics', 'Statistics', 'Computer Science', 'English', 'Hindi', 'Sanskrit'],
+            sem2: ['Mathematics', 'Statistics', 'Computer Science', 'English', 'Hindi', 'Sanskrit'],
+            sem3: ['Mathematics', 'Statistics', 'Computer Science', 'English', 'Hindi', 'Sanskrit'],
+            sem4: ['Mathematics', 'Statistics', 'Computer Science', 'English', 'Hindi', 'Sanskrit'],
+            sem5: ['Mathematics', 'Statistics', 'Computer Science', 'English', 'Hindi', 'Sanskrit'],
+            sem6: ['Mathematics', 'Statistics', 'Computer Science', 'English', 'Hindi', 'Sanskrit'],
           }
         },
         msds: {
-          id: 'msds',
-          name: 'Mathematics and Data Science',
-          displayName: 'MSDS',
-          subjects: {
-            sem1: ['Python Programming', 'Statistics', 'Linear Algebra', 'Calculus', 'English'],
-            sem2: ['Data Structures & Algorithms', 'Probability & Statistics', 'Linear Algebra II', 'Python Advanced'],
-            sem3: ['Database Management', 'Regression Analysis', 'Statistical Methods', 'Data Visualization'],
-            sem4: ['Big Data Analytics', 'Machine Learning', 'Statistical Computing', 'Data Mining'],
-            sem5: ['Deep Learning', 'Natural Language Processing', 'Time Series Analysis', 'Advanced ML'],
-            sem6: ['Capstone Project', 'Business Intelligence', 'Data Engineering', 'Research Methodology']
+          id: 'msds', name: 'Mathematics, Statistics & Data Science', displayName: 'MSDS',
+          semesters: {
+            sem1: ['Mathematics', 'Statistics', 'Data Science', 'English', 'Hindi', 'Sanskrit'],
+            sem2: ['Mathematics', 'Statistics', 'Data Science', 'English', 'Hindi', 'Sanskrit'],
+            sem3: ['Mathematics', 'Statistics', 'Data Science', 'English', 'Hindi', 'Sanskrit'],
+            sem4: ['Mathematics', 'Statistics', 'Data Science', 'English', 'Hindi', 'Sanskrit'],
+            sem5: ['Mathematics', 'Statistics', 'Data Science', 'English', 'Hindi', 'Sanskrit'],
+            sem6: ['Mathematics', 'Statistics', 'Data Science', 'English', 'Hindi', 'Sanskrit'],
           }
         },
-        lifesciences: {
-          id: 'lifesciences',
-          name: 'Life Sciences',
-          displayName: 'Life Sciences',
-          subjects: {
-            sem1: ['Microbiology', 'Biochemistry', 'Cell Biology', 'General Biology', 'Chemistry'],
-            sem2: ['Genetics', 'Molecular Biology', 'Organic Chemistry', 'Physics', 'Mathematics'],
-            sem3: ['Immunology', 'Plant Biology', 'Animal Physiology', 'Biostatistics'],
-            sem4: ['Genomics', 'Biotechnology', 'Ecology', 'Evolution', 'Research Methods'],
-            sem5: ['Advanced Genetics', 'Bioinformatics', 'Pharmacology', 'Toxicology'],
-            sem6: ['Research Project', 'Bioethics', 'Industrial Biotechnology', 'Thesis Work']
+        mpc: {
+          id: 'mpc', name: 'Mathematics, Physics & Chemistry', displayName: 'MPC',
+          semesters: {
+            sem1: ['Mathematics', 'Physics', 'Chemistry', 'English', 'Hindi', 'Sanskrit'],
+            sem2: ['Mathematics', 'Physics', 'Chemistry', 'English', 'Hindi', 'Sanskrit'],
+            sem3: ['Mathematics', 'Physics', 'Chemistry', 'English', 'Hindi', 'Sanskrit'],
+            sem4: ['Mathematics', 'Physics', 'Chemistry', 'English', 'Hindi', 'Sanskrit'],
+            sem5: ['Mathematics', 'Physics', 'Chemistry', 'English', 'Hindi', 'Sanskrit'],
+            sem6: ['Mathematics', 'Physics', 'Chemistry', 'English', 'Hindi', 'Sanskrit'],
+          }
+        },
+        bipc: {
+          id: 'bipc', name: 'Botany, Zoology & Chemistry (Life Science)', displayName: 'BiPC',
+          semesters: {
+            sem1: ['Botany', 'Zoology', 'Chemistry', 'Life Science', 'English', 'Hindi', 'Sanskrit'],
+            sem2: ['Botany', 'Zoology', 'Chemistry', 'Life Science', 'English', 'Hindi', 'Sanskrit'],
+            sem3: ['Botany', 'Zoology', 'Chemistry', 'Life Science', 'English', 'Hindi', 'Sanskrit'],
+            sem4: ['Botany', 'Zoology', 'Chemistry', 'Life Science', 'English', 'Hindi', 'Sanskrit'],
+            sem5: ['Botany', 'Zoology', 'Chemistry', 'Life Science', 'English', 'Hindi', 'Sanskrit'],
+            sem6: ['Botany', 'Zoology', 'Chemistry', 'Life Science', 'English', 'Hindi', 'Sanskrit'],
           }
         }
       }
     },
     bcom: {
-      id: 'bcom',
-      name: 'B.Com',
-      displayName: '💼 B.Com',
+      id: 'bcom', name: 'B.Com', displayName: 'B.Com', icon: '💼',
       specializations: {
         general: {
-          id: 'general',
-          name: 'General',
-          displayName: 'General',
-          subjects: {
-            sem1: ['Financial Accounting', 'Business Organization', 'Economics', 'English', 'Mathematics'],
-            sem2: ['Corporate Accounting', 'Business Law', 'Microeconomics', 'Statistics', 'Computer Applications'],
-            sem3: ['Cost Accounting', 'Company Law', 'Macroeconomics', 'Banking', 'Taxation'],
-            sem4: ['Management Accounting', 'Auditing', 'International Business', 'Marketing', 'Finance'],
-            sem5: ['Advanced Accounting', 'Financial Management', 'Investment Analysis', 'Business Ethics'],
-            sem6: ['Project Work', 'Entrepreneurship', 'Strategic Management', 'Research Methodology']
+          id: 'general', name: 'General', displayName: 'General',
+          semesters: {
+            sem1: ['Accounting - I', 'Business Management', 'Basics of Marketing', 'Economics', 'English', 'Hindi', 'Sanskrit'],
+            sem2: ['Accounting - II', 'Business Law', 'Banking Services', 'English', 'Hindi', 'Sanskrit'],
+            sem3: ['Business Statistics - I', 'Advanced Accounting', 'Auditing', 'English', 'Hindi', 'Sanskrit'],
+            sem4: ['Business Statistics - II', 'Corporate Accounting', 'Income Tax', 'English', 'Hindi', 'Sanskrit'],
+            sem5: ['Cost Accounting', 'Advanced Corporate Accounting', 'Advanced Income Tax', 'Computerized Accounting', 'English', 'Hindi', 'Sanskrit'],
+            sem6: ['Accounting Standards', 'Cost Control', 'Auditing', 'Corporate Accounting', 'English', 'Hindi', 'Sanskrit'],
           }
         },
-        computers: {
-          id: 'computers',
-          name: 'Computers',
-          displayName: 'Computers',
-          subjects: {
-            sem1: ['Financial Accounting', 'Computer Fundamentals', 'Programming', 'Economics', 'English'],
-            sem2: ['Corporate Accounting', 'Database Management', 'Web Technologies', 'Statistics', 'Business Law'],
-            sem3: ['Cost Accounting', 'Software Engineering', 'Networking', 'Taxation', 'Company Law'],
-            sem4: ['Management Accounting', 'System Analysis', 'E-Commerce', 'Marketing', 'Auditing'],
-            sem5: ['Advanced Accounting', 'Machine Learning', 'Data Analytics', 'Financial Management'],
-            sem6: ['Capstone Project', 'Business Intelligence', 'Digital Marketing', 'Entrepreneurship']
+        compapps: {
+          id: 'compapps', name: 'Computer Applications', displayName: 'Computer Applications',
+          semesters: {
+            sem1: ['Financial Accounting', 'Business Management', 'Computer Fundamentals', 'English', 'Hindi', 'Sanskrit'],
+            sem2: ['Advanced Accounting', 'Business Law', 'Computer Applications', 'English', 'Hindi', 'Sanskrit'],
+            sem3: ['Business Statistics', 'Corporate Accounting', 'Database Management', 'English', 'Hindi', 'Sanskrit'],
+            sem4: ['Income Tax', 'Computerized Accounting', 'Programming', 'English', 'Hindi', 'Sanskrit'],
+            sem5: ['Cost Accounting', 'Advanced Accounting', 'Advanced Income Tax', 'English', 'Hindi', 'Sanskrit'],
+            sem6: ['Accounting Standards', 'Auditing', 'Computer Applications', 'English', 'Hindi', 'Sanskrit'],
           }
         },
         honours: {
-          id: 'honours',
-          name: 'Honours',
-          displayName: 'Honours',
-          subjects: {
-            sem1: ['Advanced Accounting', 'Business Economics', 'Quantitative Methods', 'English', 'Computer Applications'],
-            sem2: ['Corporate Accounting', 'Managerial Economics', 'Business Statistics', 'Business Law', 'Financial Markets'],
-            sem3: ['Cost & Management Accounting', 'International Economics', 'Research Methods', 'Company Law', 'Banking'],
-            sem4: ['Advanced Cost Accounting', 'Public Finance', 'Investment Analysis', 'Auditing', 'Taxation'],
-            sem5: ['Financial Management', 'International Business', 'Strategic Management', 'Advanced Taxation'],
-            sem6: ['Research Project', 'Corporate Governance', 'Financial Derivatives', 'Business Ethics']
+          id: 'honours', name: 'Honours', displayName: 'Honours',
+          semesters: {
+            sem1: ['Financial Accounting', 'Business Management', 'Economics'],
+            sem2: ['Advanced Accounting', 'Business Law', 'Business Statistics'],
+            sem3: ['Corporate Accounting', 'Auditing', 'Financial Management'],
+            sem4: ['Income Tax', 'Cost Accounting', 'Management Accounting'],
+            sem5: ['Advanced Corporate Accounting', 'Advanced Income Tax', 'Financial Management'],
+            sem6: ['Accounting Standards', 'Auditing', 'Cost Control'],
           }
         },
-        businessanalytics: {
-          id: 'businessanalytics',
-          name: 'Business Analytics',
-          displayName: 'Business Analytics',
-          subjects: {
-            sem1: ['Business Mathematics', 'Statistics', 'Computer Applications', 'Accounting', 'Economics'],
-            sem2: ['Business Statistics', 'Database Management', 'Programming', 'Financial Accounting', 'Microeconomics'],
-            sem3: ['Data Analytics', 'Operations Research', 'Cost Accounting', 'Marketing Research', 'Macroeconomics'],
-            sem4: ['Machine Learning', 'Business Intelligence', 'Financial Management', 'Supply Chain Analytics', 'Auditing'],
-            sem5: ['Advanced Analytics', 'Predictive Modeling', 'Digital Marketing', 'Risk Management'],
-            sem6: ['Capstone Project', 'Big Data Analytics', 'Business Strategy', 'Entrepreneurship']
-          }
-        }
-      }
-    },
-    bba: {
-      id: 'bba',
-      name: 'BBA',
-      displayName: '📊 BBA',
-      specializations: {
-        general: {
-          id: 'general',
-          name: 'General',
-          displayName: 'General',
-          subjects: {
-            sem1: ['Principles of Management', 'Business Economics', 'Accounting', 'English', 'Computer Applications'],
-            sem2: ['Organizational Behavior', 'Marketing Management', 'Financial Accounting', 'Business Statistics', 'Business Law'],
-            sem3: ['Human Resource Management', 'Operations Management', 'Cost Accounting', 'Research Methods', 'International Business'],
-            sem4: ['Financial Management', 'Strategic Management', 'Consumer Behavior', 'Business Ethics', 'Entrepreneurship'],
-            sem5: ['Investment Analysis', 'Supply Chain Management', 'Digital Marketing', 'Leadership', 'Project Management'],
-            sem6: ['Capstone Project', 'Business Strategy', 'Corporate Governance', 'Innovation Management']
-          }
-        },
-        businessanalytics: {
-          id: 'businessanalytics',
-          name: 'Business Analytics',
-          displayName: 'Business Analytics',
-          subjects: {
-            sem1: ['Management Principles', 'Business Mathematics', 'Statistics', 'Computer Applications', 'Economics'],
-            sem2: ['Organizational Behavior', 'Business Statistics', 'Database Management', 'Accounting', 'Marketing'],
-            sem3: ['Operations Research', 'Data Analytics', 'HR Analytics', 'Financial Management', 'Research Methods'],
-            sem4: ['Machine Learning', 'Business Intelligence', 'Marketing Analytics', 'Supply Chain Analytics', 'Strategic Management'],
-            sem5: ['Advanced Analytics', 'Predictive Modeling', 'Customer Analytics', 'Risk Analytics', 'Digital Transformation'],
-            sem6: ['Capstone Project', 'Big Data Analytics', 'Business Strategy', 'Consulting', 'Innovation']
+        busanalytics: {
+          id: 'busanalytics', name: 'Business Analytics', displayName: 'Business Analytics',
+          semesters: {
+            sem1: ['Financial Accounting', 'Business Economics', 'Business Statistics', 'English', 'Hindi', 'Sanskrit'],
+            sem2: ['Advanced Accounting', 'Business Analytics Fundamentals', 'Business Law', 'English', 'Hindi', 'Sanskrit'],
+            sem3: ['Data Analytics', 'Financial Management', 'Business Statistics', 'English', 'Hindi', 'Sanskrit'],
+            sem4: ['Predictive Analytics', 'Cost Accounting', 'Database Management', 'English', 'Hindi', 'Sanskrit'],
+            sem5: ['Business Intelligence', 'Data Visualization', 'Management Accounting', 'English', 'Hindi', 'Sanskrit'],
+            sem6: ['Advanced Business Analytics', 'Financial Analytics', 'Business Intelligence', 'English', 'Hindi', 'Sanskrit'],
           }
         }
       }
     },
     bca: {
-      id: 'bca',
-      name: 'BCA',
-      displayName: '💻 BCA',
+      id: 'bca', name: 'BCA', displayName: 'BCA', icon: '💻',
       specializations: {
         general: {
-          id: 'general',
-          name: 'General',
-          displayName: 'General',
-          subjects: {
-            sem1: ['Mathematics', 'Programming in C', 'Computer Fundamentals', 'English', 'Environmental Studies'],
-            sem2: ['Mathematics II', 'Programming in C++', 'Data Structures', 'Digital Electronics', 'Accounting'],
-            sem3: ['Object Oriented Programming', 'Database Management', 'Computer Networks', 'Web Technologies', 'Statistics'],
-            sem4: ['Operating Systems', 'Software Engineering', 'Java Programming', 'System Analysis', 'Mathematics III'],
-            sem5: ['Machine Learning', 'Cloud Computing', 'Mobile Application Development', 'Artificial Intelligence', 'Project Management'],
-            sem6: ['Capstone Project', 'Cyber Security', 'Big Data', 'IoT', 'Industry Training']
+          id: 'general', name: 'General', displayName: 'General',
+          semesters: {
+            sem1: ['Programming Fundamentals', 'Computer Fundamentals', 'Mathematics'],
+            sem2: ['Data Structures', 'Object Oriented Programming', 'Database Management Systems'],
+            sem3: ['Operating Systems', 'Computer Networks', 'Software Engineering'],
+            sem4: ['DBMS using Python', 'Artificial Intelligence', 'Network Security'],
+            sem5: ['.NET Programming', 'UNIX Programming', 'Software Testing'],
+            sem6: ['Advanced Programming', 'Information Security', 'Project'],
+          },
+        },
+        datasci: {
+          id: 'datasci', name: 'Data Science & Analytics', displayName: 'Data Science',
+          semesters: {
+            sem1: ['Programming Fundamentals', 'Data Science Basics', 'Mathematics'],
+            sem2: ['Data Structures', 'Statistics for Data Science', 'Database Management'],
+            sem3: ['Machine Learning', 'Data Mining', 'Computer Networks'],
+            sem4: ['Deep Learning', 'Big Data Analytics', 'Cloud Computing'],
+            sem5: ['Natural Language Processing', 'Data Visualization', 'Ethics in AI'],
+            sem6: ['Capstone Project', 'Advanced Analytics', 'Project'],
+          }
+        },
+        cloud: {
+          id: 'cloud', name: 'Cloud Computing & DevOps', displayName: 'Cloud Computing',
+          semesters: {
+            sem1: ['Programming Fundamentals', 'Computer Fundamentals', 'Mathematics'],
+            sem2: ['Data Structures', 'Object Oriented Programming', 'Linux Administration'],
+            sem3: ['Cloud Architecture', 'Virtualization', 'Computer Networks'],
+            sem4: ['AWS/Azure Services', 'Containerization', 'CI/CD Pipelines'],
+            sem5: ['DevOps Practices', 'Infrastructure as Code', 'Kubernetes'],
+            sem6: ['Cloud Security', 'Serverless Architecture', 'Project'],
+          }
+        },
+        cyber: {
+          id: 'cyber', name: 'Cyber Security & Forensics', displayName: 'Cyber Security',
+          semesters: {
+            sem1: ['Programming Fundamentals', 'Computer Fundamentals', 'Mathematics'],
+            sem2: ['Data Structures', 'Network Fundamentals', 'Operating Systems'],
+            sem3: ['Cyber Security Fundamentals', 'Cryptography', 'Web Security'],
+            sem4: ['Ethical Hacking', 'Digital Forensics', 'Malware Analysis'],
+            sem5: ['Incident Response', 'Security Auditing', 'Cloud Security'],
+            sem6: ['Cyber Law', 'Penetration Testing', 'Project'],
+          }
+        }
+      }
+    },
+    bba: {
+      id: 'bba', name: 'BBA', displayName: 'BBA', icon: '📊',
+      specializations: {
+        general: {
+          id: 'general', name: 'General', displayName: 'General',
+          semesters: {
+            sem1: ['Principles of Management', 'Basics of Marketing', 'Economics', 'English', 'Hindi', 'Sanskrit'],
+            sem2: ['Financial Accounting', 'Business Statistics', 'Organizational Behaviour', 'English', 'Hindi', 'Sanskrit'],
+            sem3: ['Human Resource Management', 'Information Technology', 'Financial Management', 'English', 'Hindi', 'Sanskrit'],
+            sem4: ['Market Research', 'Management Science', 'Business Law', 'English', 'Hindi', 'Sanskrit'],
+            sem5: ['Financial Asset Management', 'Financial Markets', 'Mobile Commerce', 'English', 'Hindi', 'Sanskrit'],
+            sem6: ['Supply Chain Management', 'Business Intelligence', 'Customer Relationship Management', 'English', 'Hindi', 'Sanskrit'],
+          }
+        },
+        finance: {
+          id: 'finance', name: 'Finance & Banking', displayName: 'Finance',
+          semesters: {
+            sem1: ['Principles of Management', 'Financial Accounting', 'Economics', 'English'],
+            sem2: ['Business Statistics', 'Corporate Finance', 'Banking Theory & Practice', 'English'],
+            sem3: ['Financial Markets', 'Investment Analysis', 'Risk Management', 'English'],
+            sem4: ['Portfolio Management', 'Insurance & Banking', 'Business Law', 'English'],
+            sem5: ['Financial Derivatives', 'International Finance', 'Tax Planning', 'English'],
+            sem6: ['Financial Planning', 'Wealth Management', 'Project', 'English'],
+          }
+        },
+        hrm: {
+          id: 'hrm', name: 'Human Resource Management', displayName: 'HRM',
+          semesters: {
+            sem1: ['Principles of Management', 'Organizational Behaviour', 'Economics', 'English'],
+            sem2: ['Business Statistics', 'Human Resource Management', 'Business Communication', 'English'],
+            sem3: ['Recruitment & Selection', 'Training & Development', 'Labour Laws', 'English'],
+            sem4: ['Performance Management', 'Compensation Management', 'Organizational Development', 'English'],
+            sem5: ['Strategic HRM', 'Employee Relations', 'HR Analytics', 'English'],
+            sem6: ['International HRM', 'Workplace Psychology', 'Project', 'English'],
+          }
+        },
+        marketing: {
+          id: 'marketing', name: 'Marketing Management', displayName: 'Marketing',
+          semesters: {
+            sem1: ['Principles of Management', 'Basics of Marketing', 'Economics', 'English'],
+            sem2: ['Business Statistics', 'Consumer Behaviour', 'Advertising Management', 'English'],
+            sem3: ['Digital Marketing', 'Sales & Distribution Management', 'Brand Management', 'English'],
+            sem4: ['Market Research', 'Services Marketing', 'Rural Marketing', 'English'],
+            sem5: ['International Marketing', 'Marketing Analytics', 'E-Commerce', 'English'],
+            sem6: ['Strategic Marketing', 'Social Media Marketing', 'Project', 'English'],
           }
         }
       }
@@ -195,22 +204,41 @@ export const pyqData = {
   }
 };
 
-// Helper functions for data access
-export const getYears = () => pyqData.years;
-export const getSemesters = (yearId) => {
-  const year = pyqData.years.find(y => y.id === yearId);
-  return year ? year.semesters : [];
-};
-export const getExamYears = () => pyqData.examYears;
+// Helper functions
 export const getStreams = () => pyqData.streams;
-export const getSpecializations = (streamId) => {
-  const stream = pyqData.streams[streamId];
-  return stream ? stream.specializations : {};
+export const getSpecializations = (streamId) => pyqData.streams[streamId]?.specializations || {};
+export const getSemesters = (streamId, specId) => pyqData.streams[streamId]?.specializations[specId]?.semesters || {};
+export const getSubjects = (streamId, specId, semId) => pyqData.streams[streamId]?.specializations[specId]?.semesters[semId] || [];
+export const getPyqYears = () => pyqYears;
+export const getSemesterOptions = () => [
+  { id: 'sem1', name: 'Semester 1', displayName: 'Sem 1' },
+  { id: 'sem2', name: 'Semester 2', displayName: 'Sem 2' },
+  { id: 'sem3', name: 'Semester 3', displayName: 'Sem 3' },
+  { id: 'sem4', name: 'Semester 4', displayName: 'Sem 4' },
+  { id: 'sem5', name: 'Semester 5', displayName: 'Sem 5' },
+  { id: 'sem6', name: 'Semester 6', displayName: 'Sem 6' },
+];
+
+// Get all subjects for a stream + semester (aggregated across all specializations)
+export const getAllSubjectsForStreamSemester = (streamId, semId) => {
+  const specs = getSpecializations(streamId);
+  const subjectSet = new Set();
+  Object.values(specs).forEach(spec => {
+    if (spec.semesters && spec.semesters[semId]) {
+      spec.semesters[semId].forEach(s => subjectSet.add(s));
+    }
+  });
+  return Array.from(subjectSet).sort();
 };
-export const getSubjects = (streamId, specializationId, semesterId) => {
-  const stream = pyqData.streams[streamId];
-  if (!stream) return [];
-  const specialization = stream.specializations[specializationId];
-  if (!specialization) return [];
-  return specialization.subjects[semesterId] || [];
+
+// Get all semesters that exist for a given stream
+export const getAvailableSemesters = (streamId) => {
+  const specs = getSpecializations(streamId);
+  const semSet = new Set();
+  Object.values(specs).forEach(spec => {
+    if (spec.semesters) {
+      Object.keys(spec.semesters).forEach(s => semSet.add(s));
+    }
+  });
+  return Array.from(semSet).sort();
 };

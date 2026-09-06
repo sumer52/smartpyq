@@ -8,7 +8,6 @@ import {
   ScaleIcon,
   CogIcon,
 } from '@heroicons/react/24/outline';
-
 const TermsPage = () => {
   const sections = [
     {
@@ -117,9 +116,7 @@ const TermsPage = () => {
       ]
     }
   ];
-
   const lastUpdated = 'January 15, 2024';
-
   return (
     <div className="min-h-screen bg-gradient-to-br from-bg-dark via-slate-900 to-bg-dark">
       {/* Hero Section */}
@@ -144,7 +141,6 @@ const TermsPage = () => {
               Last updated: {lastUpdated}
             </p>
           </motion.div>
-
           {/* Introduction */}
           <motion.div
             initial={{ opacity: 0, y: 20 }}
@@ -160,7 +156,6 @@ const TermsPage = () => {
               By accessing or using our service, you agree to be bound by these Terms. If you disagree with any part of these terms, then you may not access the service.
             </p>
           </motion.div>
-
           {/* Terms Sections */}
           <div className="space-y-8">
             {sections.map((section, index) => {
@@ -179,7 +174,6 @@ const TermsPage = () => {
                     </div>
                     <h2 className="text-2xl font-bold text-white">{section.title}</h2>
                   </div>
-                  
                   <div className="space-y-6">
                     {section.content.map((item, itemIndex) => (
                       <div key={itemIndex}>
@@ -198,7 +192,6 @@ const TermsPage = () => {
               );
             })}
           </div>
-
           {/* Payment Terms */}
           <motion.div
             initial={{ opacity: 0, y: 20 }}
@@ -207,6 +200,13 @@ const TermsPage = () => {
             className="bg-slate-800/50 backdrop-blur-sm border border-slate-700 rounded-2xl p-8 mt-8"
           >
             <h2 className="text-2xl font-bold text-white mb-4">Payment Terms</h2>
+            <p className="text-gray-300 leading-relaxed mb-4">
+              SmartPYQ is a free educational platform. There are no subscription fees, paywalls, or premium tiers for accessing previous year question papers or using the AI study assistant.
+            </p>
+            <p className="text-gray-300 leading-relaxed">
+              We reserve the right to introduce paid features in the future. If we do, existing free features will remain free, and any new pricing will be communicated in advance.
+            </p>
+          </motion.div>
           {/* Privacy and Data */}
           <motion.div
             initial={{ opacity: 0, y: 20 }}
@@ -222,7 +222,6 @@ const TermsPage = () => {
               By using our service, you consent to the collection and use of your information as described in our Privacy Policy.
             </p>
           </motion.div>
-
           {/* Limitation of Liability */}
           <motion.div
             initial={{ opacity: 0, y: 20 }}
@@ -238,7 +237,6 @@ const TermsPage = () => {
               As a  educational platform, our total liability to you for all claims arising from or relating to the service shall not exceed ₹1,000.
             </p>
           </motion.div>
-
           {/* Governing Law */}
           <motion.div
             initial={{ opacity: 0, y: 20 }}
@@ -251,7 +249,6 @@ const TermsPage = () => {
               These Terms shall be governed by and construed in accordance with the laws of India. Any disputes arising from these Terms or your use of the service shall be subject to the exclusive jurisdiction of the courts in Bangalore, India.
             </p>
           </motion.div>
-
           {/* Changes to Terms */}
           <motion.div
             initial={{ opacity: 0, y: 20 }}
@@ -267,7 +264,6 @@ const TermsPage = () => {
               Your continued use of the service after any such changes constitutes your acceptance of the new Terms.
             </p>
           </motion.div>
-
           {/* Contact Information */}
           <motion.div
             initial={{ opacity: 0, y: 20 }}
@@ -282,17 +278,13 @@ const TermsPage = () => {
             <div className="flex flex-col sm:flex-row gap-4 justify-center">
               <motion.button
                 onClick={() => window.location.href = '/contact'}
-                className="btn-primary px-6 py-3 font-semibold"
-                whileHover={{ scale: 1.05 }}
-                whileTap={{ scale: 0.95 }}
+                className="btn btn-primary px-6 py-3 font-semibold"
               >
                 Contact Support
               </motion.button>
               <motion.a
                 href="mailto:legal@smartpyq.com"
-                className="px-6 py-3 border border-brand-500 text-brand-400 rounded-lg font-semibold hover:bg-brand-500/10 transition-colors duration-200"
-                whileHover={{ scale: 1.05 }}
-                whileTap={{ scale: 0.95 }}
+                className="btn btn-secondary px-6 py-3 font-semibold"
               >
                 legal@smartpyq.com
               </motion.a>
@@ -303,5 +295,4 @@ const TermsPage = () => {
     </div>
   );
 };
-
 export default TermsPage;

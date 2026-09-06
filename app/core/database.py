@@ -20,15 +20,41 @@ from app.core.config import derived_settings, settings
 logger = logging.getLogger(__name__)
 
 # Database engine configuration
-engine = create_async_engine(
-    derived_settings.database_url_async,
-    echo=settings.DEBUG,
-    poolclass=NullPool if settings.ENV == "test" else None,
-    pool_pre_ping=True,
-    pool_recycle=3600,  # Recycle connections after 1 hour
-    max_overflow=20,
-    pool_size=10
-)
+db_url = derived_settings.database_url_async
+engine_kwargs = {
+    "echo": settings.DEBUG,
+    "pool_pre_ping": True,  # Verify connections before use
+    "pool_recycle": 3600,   # Recycle connections after 1 hour
+    "pool_timeout": 30,     # Wait max 30s for connection from pool
+}
+
+# Configure based on database type
+if "sqlite" in db_url:
+    # SQLite-specific settings (development/testing)
+    engine_kwargs["connect_args"] = {"timeout": 10, "check_same_thread": False}
+elif "postgresql" in db_url:
+    # PostgreSQL-specific settings (production)
+    engine_kwargs["pool_size"] = 20
+    engine_kwargs["max_overflow"] = 10
+    engine_kwargs["connect_args"] = {
+        "command_timeout": 30,  # Query timeout
+        "timeout": 10,          # Connection timeout
+    }
+else:
+    # Default async settings
+    engine_kwargs["pool_size"] = 10
+    engine_kwargs["max_overflow"] = 20
+
+if settings.ENV == "test":
+    engine_kwargs["poolclass"] = NullPool
+    engine_kwargs.pop("pool_size", None)
+    engine_kwargs.pop("max_overflow", None)
+
+try:
+    engine = create_async_engine(db_url, **engine_kwargs)
+except Exception as e:
+    logger.warning(f"Could not create database engine: {e}")
+    engine = None
 
 # Session factory
 AsyncSessionLocal = async_sessionmaker(
@@ -59,10 +85,14 @@ async def get_db() -> AsyncGenerator[AsyncSession, None]:
     Yields:
         AsyncSession: Database session
     """
+    from fastapi import HTTPException
     async with AsyncSessionLocal() as session:
         try:
             yield session
             await session.commit()
+        except HTTPException:
+            # Don't catch HTTP exceptions - let them pass through
+            raise
         except Exception as e:
             await session.rollback()
             logger.error(f"Database session error: {e}")
@@ -70,75 +100,5 @@ async def get_db() -> AsyncGenerator[AsyncSession, None]:
         finally:
             await session.close()
 
-
-async def init_db() -> None:
-    """Initialize database tables.
-    
-    Creates all tables defined in models.
-    """
-    try:
-        async with engine.begin() as conn:
-            # Import all models to ensure they are registered
-            from app.models import (
-                tenant,
-                user,
-                paper,
-                chat,
-                feature,
-                subscriber,
-                audit_log
-            )
-            
-            await conn.run_sync(Base.metadata.create_all)
-            logger.info("Database tables created successfully")
-    except Exception as e:
-        logger.error(f"Failed to initialize database: {e}")
-        raise
-
-
-async def close_db() -> None:
-    """Close database connections."""
-    try:
-        await engine.dispose()
-        logger.info("Database connections closed")
-    except Exception as e:
-        logger.error(f"Error closing database connections: {e}")
-        raise
-
-
-class DatabaseManager:
-    """Database manager for handling connections and transactions."""
-    
-    def __init__(self):
-        self.engine = engine
-        self.session_factory = AsyncSessionLocal
-    
-    async def create_session(self) -> AsyncSession:
-        """Create a new database session."""
-        return self.session_factory()
-    
-    async def execute_transaction(self, func, *args, **kwargs):
-        """Execute a function within a database transaction."""
-        async with self.session_factory() as session:
-            try:
-                result = await func(session, *args, **kwargs)
-                await session.commit()
-                return result
-            except Exception as e:
-                await session.rollback()
-                logger.error(f"Transaction failed: {e}")
-                raise
-    
-    async def health_check(self) -> bool:
-        """Check database connectivity."""
-        try:
-            async with self.session_factory() as session:
-                await session.execute("SELECT 1")
-                return True
-        except Exception as e:
-            logger.error(f"Database health check failed: {e}")
-            return False
-
-
-# Global database manager instance
-db_manager = DatabaseManager()
+# Alias for backward compatibility
+get_db_session = get_db

@@ -5,7 +5,7 @@ Handles feature management, newsletter subscriptions, and platform settings.
 
 from typing import Optional, List, Dict, Any
 from datetime import datetime
-from email_validator import validate_email, EmailNotValidError
+
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -15,22 +15,19 @@ from app.core.exceptions import (
     ConflictError,
     PermissionError
 )
-from app.models.feature import Feature, Subscriber
+from app.models.feature import Feature
 from app.models.user import User, UserRole
 from app.models.audit_log import AuditAction, AuditSeverity
-from app.repositories.feature_repository import FeatureRepository, SubscriberRepository
+from app.repositories.feature_repository import FeatureRepository
 from app.repositories.audit_log_repository import AuditLogRepository
 from app.schemas.feature import (
     FeatureResponse,
     FeatureCreateRequest,
     FeatureUpdateRequest,
-    SubscriberResponse,
-    SubscribeRequest,
-    NewsletterStatsResponse
 )
-from app.utils.cache import CacheService
+from app.services.cache_service import CacheService
 from app.utils.email import EmailService
-from app.workers.tasks import send_newsletter_batch
+# from app.workers.tasks import send_newsletter_batch
 
 
 class FeatureService:
@@ -38,12 +35,12 @@ class FeatureService:
     
     def __init__(
         self,
-        db: AsyncSession,
+        db: Optional[AsyncSession] = None,
         cache_service: Optional[CacheService] = None
     ):
         self.db = db
-        self.feature_repo = FeatureRepository(db)
-        self.audit_repo = AuditLogRepository(db)
+        self.feature_repo = FeatureRepository(db) if db else None
+        self.audit_repo = AuditLogRepository(db) if db else None
         self.cache_service = cache_service
     
     async def get_active_features(
@@ -381,384 +378,3 @@ class FeatureService:
             pass
 
 
-class NewsletterService:
-    """Service for newsletter subscription management."""
-    
-    def __init__(
-        self,
-        db: AsyncSession,
-        email_service: Optional[EmailService] = None,
-        cache_service: Optional[CacheService] = None
-    ):
-        self.db = db
-        self.subscriber_repo = SubscriberRepository(db)
-        self.audit_repo = AuditLogRepository(db)
-        self.email_service = email_service
-        self.cache_service = cache_service
-    
-    async def subscribe(
-        self,
-        subscribe_data: SubscribeRequest,
-        ip_address: Optional[str] = None,
-        user_agent: Optional[str] = None
-    ) -> Dict[str, Any]:
-        """Subscribe email to newsletter.
-        
-        Args:
-            subscribe_data: Subscription data
-            ip_address: Client IP address
-            user_agent: Client user agent
-            
-        Returns:
-            Subscription result
-            
-        Raises:
-            ValidationError: If email is invalid
-            ConflictError: If email already subscribed
-        """
-        # Validate email format
-        try:
-            validated_email = validate_email(subscribe_data.email)
-            email = validated_email.email.lower()
-        except EmailNotValidError as e:
-            raise ValidationError(f"Invalid email format: {str(e)}")
-        
-        # Check if already subscribed
-        existing_subscriber = await self.subscriber_repo.get_by_email(email)
-        if existing_subscriber:
-            if existing_subscriber.is_active:
-                raise ConflictError("Email is already subscribed")
-            else:
-                # Reactivate subscription
-                updated_subscriber = await self.subscriber_repo.update(
-                    existing_subscriber.id,
-                    is_active=True,
-                    subscribed_at=datetime.utcnow(),
-                    preferences=subscribe_data.preferences or {}
-                )
-                
-                await self._log_audit(
-                    AuditAction.NEWSLETTER_RESUBSCRIBE,
-                    details=f"Newsletter resubscribed: {email}",
-                    ip_address=ip_address,
-                    metadata={
-                        'email': email,
-                        'user_agent': user_agent,
-                        'preferences': subscribe_data.preferences
-                    }
-                )
-                
-                return {
-                    'subscribed': True,
-                    'message': 'Successfully resubscribed to newsletter',
-                    'subscriber_id': updated_subscriber.id
-                }
-        
-        # Create new subscription
-        subscriber_data = {
-            'email': email,
-            'name': subscribe_data.name,
-            'preferences': subscribe_data.preferences or {},
-            'source': subscribe_data.source or 'website',
-            'subscribed_at': datetime.utcnow(),
-            'is_active': True,
-            'metadata': {
-                'ip_address': ip_address,
-                'user_agent': user_agent
-            }
-        }
-        
-        subscriber = await self.subscriber_repo.create(**subscriber_data)
-        
-        # Send welcome email
-        welcome_sent = False
-        if self.email_service:
-            try:
-                await self.email_service.send_welcome_email(
-                    email,
-                    subscribe_data.name or 'Subscriber'
-                )
-                welcome_sent = True
-            except Exception:
-                # Log error but don't fail subscription
-                pass
-        
-        # Log audit event
-        await self._log_audit(
-            AuditAction.NEWSLETTER_SUBSCRIBE,
-            details=f"Newsletter subscribed: {email}",
-            ip_address=ip_address,
-            metadata={
-                'email': email,
-                'name': subscribe_data.name,
-                'user_agent': user_agent,
-                'preferences': subscribe_data.preferences,
-                'welcome_sent': welcome_sent
-            }
-        )
-        
-        return {
-            'subscribed': True,
-            'message': 'Successfully subscribed to newsletter',
-            'subscriber_id': subscriber.id,
-            'welcome_sent': welcome_sent
-        }
-    
-    async def unsubscribe(
-        self,
-        email: str,
-        ip_address: Optional[str] = None,
-        user_agent: Optional[str] = None
-    ) -> Dict[str, Any]:
-        """Unsubscribe email from newsletter.
-        
-        Args:
-            email: Email to unsubscribe
-            ip_address: Client IP address
-            user_agent: Client user agent
-            
-        Returns:
-            Unsubscription result
-            
-        Raises:
-            NotFoundError: If email not found
-        """
-        # Validate email format
-        try:
-            validated_email = validate_email(email)
-            email = validated_email.email.lower()
-        except EmailNotValidError as e:
-            raise ValidationError(f"Invalid email format: {str(e)}")
-        
-        # Find subscriber
-        subscriber = await self.subscriber_repo.get_by_email(email)
-        if not subscriber:
-            raise NotFoundError("Email not found in subscription list")
-        
-        if not subscriber.is_active:
-            return {
-                'unsubscribed': True,
-                'message': 'Email was already unsubscribed',
-                'subscriber_id': subscriber.id
-            }
-        
-        # Deactivate subscription
-        await self.subscriber_repo.update(
-            subscriber.id,
-            is_active=False,
-            unsubscribed_at=datetime.utcnow()
-        )
-        
-        # Log audit event
-        await self._log_audit(
-            AuditAction.NEWSLETTER_UNSUBSCRIBE,
-            details=f"Newsletter unsubscribed: {email}",
-            ip_address=ip_address,
-            metadata={
-                'email': email,
-                'user_agent': user_agent
-            }
-        )
-        
-        return {
-            'unsubscribed': True,
-            'message': 'Successfully unsubscribed from newsletter',
-            'subscriber_id': subscriber.id
-        }
-    
-    async def update_preferences(
-        self,
-        email: str,
-        preferences: Dict[str, Any],
-        ip_address: Optional[str] = None
-    ) -> SubscriberResponse:
-        """Update subscriber preferences.
-        
-        Args:
-            email: Subscriber email
-            preferences: New preferences
-            ip_address: Client IP address
-            
-        Returns:
-            Updated subscriber
-            
-        Raises:
-            NotFoundError: If subscriber not found
-        """
-        # Validate email format
-        try:
-            validated_email = validate_email(email)
-            email = validated_email.email.lower()
-        except EmailNotValidError as e:
-            raise ValidationError(f"Invalid email format: {str(e)}")
-        
-        # Find subscriber
-        subscriber = await self.subscriber_repo.get_by_email(email)
-        if not subscriber or not subscriber.is_active:
-            raise NotFoundError("Active subscription not found")
-        
-        # Update preferences
-        updated_subscriber = await self.subscriber_repo.update_preferences(
-            subscriber.id,
-            preferences
-        )
-        
-        # Log audit event
-        await self._log_audit(
-            AuditAction.NEWSLETTER_PREFERENCES_UPDATE,
-            details=f"Newsletter preferences updated: {email}",
-            ip_address=ip_address,
-            metadata={
-                'email': email,
-                'preferences': preferences
-            }
-        )
-        
-        return SubscriberResponse.from_orm(updated_subscriber)
-    
-    async def get_subscriber_stats(
-        self,
-        user: User
-    ) -> NewsletterStatsResponse:
-        """Get newsletter statistics.
-        
-        Args:
-            user: Requesting user
-            
-        Returns:
-            Newsletter statistics
-            
-        Raises:
-            PermissionError: If user lacks permission
-        """
-        # Only admins can view newsletter stats
-        if user.role != UserRole.ADMIN:
-            raise PermissionError("Only administrators can view newsletter statistics")
-        
-        stats = await self.subscriber_repo.get_subscriber_stats()
-        
-        return NewsletterStatsResponse(
-            total_subscribers=stats.get('total', 0),
-            active_subscribers=stats.get('active', 0),
-            inactive_subscribers=stats.get('inactive', 0),
-            recent_subscriptions=stats.get('recent_subscriptions', 0),
-            recent_unsubscriptions=stats.get('recent_unsubscriptions', 0),
-            subscribers_by_source=stats.get('by_source', {}),
-            growth_rate=stats.get('growth_rate', 0.0)
-        )
-    
-    async def send_newsletter(
-        self,
-        subject: str,
-        content: str,
-        sender: User,
-        target_preferences: Optional[Dict[str, Any]] = None,
-        ip_address: Optional[str] = None
-    ) -> Dict[str, Any]:
-        """Send newsletter to subscribers.
-        
-        Args:
-            subject: Email subject
-            content: Email content
-            sender: User sending the newsletter
-            target_preferences: Target subscriber preferences
-            ip_address: Client IP address
-            
-        Returns:
-            Send result
-            
-        Raises:
-            PermissionError: If user lacks permission
-        """
-        # Only admins can send newsletters
-        if sender.role != UserRole.ADMIN:
-            raise PermissionError("Only administrators can send newsletters")
-        
-        # Get active subscribers
-        subscribers = await self.subscriber_repo.get_active_subscribers(
-            preferences_filter=target_preferences
-        )
-        
-        if not subscribers:
-            return {
-                'sent': False,
-                'message': 'No active subscribers found',
-                'recipient_count': 0
-            }
-        
-        # Queue newsletter sending
-        if hasattr(send_newsletter_batch, 'delay'):
-            task = send_newsletter_batch.delay(
-                subject=subject,
-                content=content,
-                subscriber_ids=[s.id for s in subscribers],
-                sender_id=sender.id
-            )
-            
-            # Log audit event
-            await self._log_audit(
-                AuditAction.NEWSLETTER_SEND,
-                actor_id=sender.id,
-                details=f"Newsletter queued: {subject} ({len(subscribers)} recipients)",
-                ip_address=ip_address,
-                metadata={
-                    'subject': subject,
-                    'recipient_count': len(subscribers),
-                    'task_id': str(task.id) if hasattr(task, 'id') else None,
-                    'target_preferences': target_preferences
-                }
-            )
-            
-            return {
-                'sent': True,
-                'message': 'Newsletter queued for sending',
-                'recipient_count': len(subscribers),
-                'task_id': str(task.id) if hasattr(task, 'id') else None
-            }
-        
-        return {
-            'sent': False,
-            'message': 'Newsletter service not available',
-            'recipient_count': len(subscribers)
-        }
-    
-    async def _log_audit(
-        self,
-        action: AuditAction,
-        actor_id: Optional[int] = None,
-        target_type: Optional[str] = None,
-        target_id: Optional[int] = None,
-        tenant_id: Optional[int] = None,
-        details: Optional[str] = None,
-        ip_address: Optional[str] = None,
-        severity: AuditSeverity = AuditSeverity.INFO,
-        metadata: Optional[Dict[str, Any]] = None
-    ) -> None:
-        """Log audit event.
-        
-        Args:
-            action: Audit action
-            actor_id: Actor user ID
-            target_type: Target entity type
-            target_id: Target entity ID
-            tenant_id: Tenant ID
-            details: Event details
-            ip_address: Client IP address
-            severity: Event severity
-            metadata: Additional metadata
-        """
-        try:
-            await self.audit_repo.create_log(
-                action=action,
-                actor_id=actor_id,
-                target_type=target_type,
-                target_id=target_id,
-                tenant_id=tenant_id,
-                details=details,
-                ip_address=ip_address,
-                severity=severity,
-                metadata=metadata
-            )
-        except Exception:
-            # Don't let audit logging failures break the main flow
-            pass

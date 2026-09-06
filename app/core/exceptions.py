@@ -57,6 +57,13 @@ class AuthorizationError(CustomException):
         )
 
 
+class PermissionError(AuthorizationError):
+    """Permission denied exception (alias for AuthorizationError)."""
+    
+    def __init__(self, message: str = "Permission denied"):
+        super().__init__(message=message)
+
+
 class NotFoundError(CustomException):
     """Resource not found exception."""
     
@@ -182,3 +189,21 @@ class WorkerError(CustomException):
             error_code="WORKER_ERROR",
             details={"task": task_name}
         )
+
+
+class ServiceError(CustomException):
+    """Generic service error exception."""
+    
+    def __init__(self, message: str = "Service error"):
+        super().__init__(
+            message=message,
+            status_code=502,
+            error_code="SERVICE_ERROR"
+        )
+
+
+class DuplicateError(ConflictError):
+    """Duplicate resource exception (alias for ConflictError)."""
+    
+    def __init__(self, message: str = "Resource already exists"):
+        super().__init__(message=message)

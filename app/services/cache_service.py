@@ -4,11 +4,11 @@ Provides async caching functionality for services that need it.
 """
 
 import asyncio
-import json
+
 import logging
 import pickle
 from typing import Any, Dict, List, Optional, Union
-import aioredis
+from redis import asyncio as aioredis
 from app.core.config import settings
 
 logger = logging.getLogger(__name__)
@@ -16,7 +16,7 @@ logger = logging.getLogger(__name__)
 class CacheService:
     """Async Redis-based cache service."""
     
-    def __init__(self, redis_client: Optional[aioredis.Redis] = None):
+    def __init__(self, redis_client=None):
         """Initialize cache service.
         
         Args:

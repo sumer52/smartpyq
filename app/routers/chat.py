@@ -14,7 +14,7 @@ from fastapi import (
     status,
     Request
 )
-from fastapi.responses import StreamingResponse
+
 from pydantic import BaseModel, Field
 from sse_starlette import EventSourceResponse
 
@@ -87,6 +87,54 @@ class StreamChunk(BaseModel):
 
 # Initialize service
 chat_service = ChatService()
+
+class SimpleChatRequest(BaseModel):
+    """Simple chat request (no auth required)"""
+    prompt: str = Field(..., min_length=1, max_length=4000)
+    session_id: Optional[str] = Field(None)
+
+class SimpleChatResponse(BaseModel):
+    """Simple chat response"""
+    response: str
+    session_id: Optional[str] = None
+
+@router.post("/simple", response_model=SimpleChatResponse)
+async def simple_chat(request: SimpleChatRequest):
+    """Simple chat endpoint - no authentication required"""
+    try:
+        from app.utils.ai import get_ai_response, ai_service
+        has_ai = (ai_service.gemini_client is not None) or (ai_service.openai_client is not None)
+        
+        if not has_ai:
+            prompt_lower = request.prompt.lower()
+            if any(w in prompt_lower for w in ["paper", "pyq", "previous", "question"]):
+                response = "You can find previous year papers in the PYQ Hub! Navigate to the PYQ Hub section to browse papers by stream, semester, and subject."
+            elif any(w in prompt_lower for w in ["upload", "submit", "add"]):
+                response = "To upload a paper, go to the Upload page. You can upload PDF or image files with stream, semester, subject, and year info."
+            elif any(w in prompt_lower for w in ["hi", "hello", "hey", "help"]):
+                response = "Hello! I am SmartPYQ study assistant. I can help with finding papers, study tips, exam patterns, and navigating the platform. How can I help?"
+            elif any(w in prompt_lower for w in ["study", "exam", "prepare", "tip"]):
+                response = "Study tips: 1. Practice with PYQs 2. Focus on repeated questions 3. Time management 4. Revise regularly 5. Analyze patterns"
+            else:
+                response = "I am in basic mode (AI API not configured). I can help you navigate: PYQ Hub for papers, Upload to share papers, Search to find papers, Analysis for exam patterns."
+            return SimpleChatResponse(response=response, session_id=request.session_id)
+        
+        result = await get_ai_response(prompt=request.prompt)
+        return SimpleChatResponse(response=result.content, session_id=request.session_id)
+    except (ImportError, Exception):
+        # AI not configured or API keys invalid - provide helpful fallback
+        prompt_lower = request.prompt.lower()
+        if any(w in prompt_lower for w in ["paper", "pyq", "previous", "question"]):
+            response = "You can find previous year papers in the PYQ Hub! Navigate to browse papers by stream, semester, and subject."
+        elif any(w in prompt_lower for w in ["upload", "submit", "add"]):
+            response = "To upload a paper, go to the Upload page. You can upload PDF or image files."
+        elif any(w in prompt_lower for w in ["hi", "hello", "hey", "help"]):
+            response = "Hello! I am SmartPYQ study assistant. I can help with finding papers, study tips, and exam patterns. How can I help?"
+        elif any(w in prompt_lower for w in ["study", "exam", "prepare", "tip"]):
+            response = "Study tips: 1. Practice with PYQs 2. Focus on repeated questions 3. Time management 4. Revise regularly 5. Analyze patterns"
+        else:
+            response = "I am in basic mode. I can help navigate: PYQ Hub for papers, Upload to share, Search to find papers, Analysis for patterns."
+        return SimpleChatResponse(response=response, session_id=request.session_id)
 
 @router.post("/", response_model=ChatResponse)
 async def chat(

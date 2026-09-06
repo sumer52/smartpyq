@@ -19,7 +19,7 @@ from app.core.exceptions import ValidationError, NotFoundError
 class UserRepository(BaseRepository[User]):
     """Repository for user operations."""
     
-    def __init__(self, db: AsyncSession):
+    def __init__(self, db=None):
         super().__init__(db, User)
     
     async def get_by_email(
@@ -279,13 +279,13 @@ class UserRepository(BaseRepository[User]):
         # Update count and potentially lock account
         update_data = {
             'failed_login_attempts': new_count,
-            'last_failed_login_at': datetime.utcnow()
+            'last_login_at': datetime.utcnow()
         }
         
         # Lock account after 5 failed attempts
         if new_count >= 5:
-            update_data['is_locked'] = True
-            update_data['locked_at'] = datetime.utcnow()
+            update_data['locked_until'] = datetime.utcnow() + timedelta(hours=1)
+            
         
         await self.update(user_id, **update_data)
         return new_count
@@ -303,8 +303,7 @@ class UserRepository(BaseRepository[User]):
             update(User)
             .where(User.id == user_id)
             .values(
-                is_locked=False,
-                locked_at=None,
+                locked_until=None,
                 failed_login_attempts=0
             )
         )
@@ -474,14 +473,14 @@ class UserRepository(BaseRepository[User]):
         Returns:
             List of locked users
         """
-        query = select(User).where(User.is_locked == True)
+        query = select(User).where(User.locked_until > datetime.utcnow())
         
         if tenant_id:
             query = query.where(User.tenant_id == tenant_id)
         
         if hours_locked:
             cutoff_time = datetime.utcnow() - timedelta(hours=hours_locked)
-            query = query.where(User.locked_at <= cutoff_time)
+            query = query.where()
         
         result = await self.db.execute(query)
         return result.scalars().all()
@@ -515,7 +514,7 @@ class UserRepository(BaseRepository[User]):
         pending_users = pending_result.scalar()
         
         # Locked users
-        locked_query = base_query.where(User.is_locked == True)
+        locked_query = base_query.where(User.locked_until > datetime.utcnow())
         locked_result = await self.db.execute(locked_query)
         locked_users = locked_result.scalar()
         

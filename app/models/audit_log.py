@@ -68,17 +68,15 @@ class AuditAction(str, Enum):
     TENANT_CREATED = "tenant_created"
     TENANT_UPDATED = "tenant_updated"
     TENANT_DELETED = "tenant_deleted"
-    
-    # Newsletter
-    NEWSLETTER_SUBSCRIBED = "newsletter_subscribed"
-    NEWSLETTER_UNSUBSCRIBED = "newsletter_unsubscribed"
-    NEWSLETTER_SENT = "newsletter_sent"
 
 
 class AuditSeverity(str, Enum):
     """Enumeration of audit severity levels."""
     
+    INFO = "info"
     LOW = "low"
+    WARNING = "warning"
+    ERROR = "error"
     MEDIUM = "medium"
     HIGH = "high"
     CRITICAL = "critical"
@@ -118,7 +116,7 @@ class AuditLog(Base):
     
     # Event details
     description = Column(Text, nullable=True)
-    metadata = Column(JSON, nullable=False, default=dict)
+    event_metadata = Column("metadata", JSON, nullable=False, default=dict)
     
     # Status and outcome
     success = Column(Boolean, nullable=False, default=True)
@@ -191,7 +189,7 @@ class AuditLog(Base):
             target_id=str(target_id) if target_id is not None else None,
             target_name=target_name,
             description=description,
-            metadata=metadata or {},
+            event_metadata=metadata or {},
             severity=severity,
             success=success,
             error_message=error_message,
@@ -209,9 +207,9 @@ class AuditLog(Base):
             key: Metadata key
             value: Metadata value
         """
-        if self.metadata is None:
-            self.metadata = {}
-        self.metadata[key] = value
+        if self.event_metadata is None:
+            self.event_metadata = {}
+        self.event_metadata[key] = value
     
     def get_metadata(self, key: str, default=None):
         """Get metadata value.
@@ -223,7 +221,7 @@ class AuditLog(Base):
         Returns:
             Metadata value or default
         """
-        return self.metadata.get(key, default) if self.metadata else default
+        return self.event_metadata.get(key, default) if self.event_metadata else default
     
     @property
     def is_security_event(self) -> bool:

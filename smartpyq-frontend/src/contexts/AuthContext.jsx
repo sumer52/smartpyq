@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useState, useEffect } from 'react';
+import React, { createContext, useContext, useState, useEffect, useMemo, useCallback, useRef } from 'react';
 
 const AuthContext = createContext();
 
@@ -41,18 +41,34 @@ export const AuthProvider = ({ children }) => {
   useEffect(() => {
     // Check for existing session
     const checkAuthStatus = () => {
-      const token = localStorage.getItem('authToken');
-      const userData = localStorage.getItem('userData');
+      // Support both token key names for compatibility
+      const token = localStorage.getItem('auth_token') || localStorage.getItem('authToken');
+      const userData = localStorage.getItem('userData') || localStorage.getItem('user');
       
       if (token && userData) {
         try {
+          // Check if JWT token is expired by decoding payload
+          const payload = JSON.parse(atob(token.split('.')[1]));
+          const now = Math.floor(Date.now() / 1000);
+          if (payload.exp && payload.exp < now) {
+            // Token is expired, clear everything
+            localStorage.removeItem('auth_token');
+            localStorage.removeItem('authToken');
+            localStorage.removeItem('refresh_token');
+            localStorage.removeItem('userData');
+            localStorage.removeItem('user');
+            setIsLoading(false);
+            return;
+          }
           const parsedUser = JSON.parse(userData);
           setUser(parsedUser);
           setIsAuthenticated(true);
         } catch (error) {
           console.error('Error parsing user data:', error);
+          localStorage.removeItem('auth_token');
           localStorage.removeItem('authToken');
           localStorage.removeItem('userData');
+          localStorage.removeItem('user');
         }
       }
       setIsLoading(false);
@@ -61,108 +77,295 @@ export const AuthProvider = ({ children }) => {
     checkAuthStatus();
   }, []);
 
-  const login = async (email, password) => {
+  const login = useCallback(async (email, password) => {
     setIsLoading(true);
     
     try {
-      // Simulate API call
-      await new Promise(resolve => setTimeout(resolve, 1500));
-      
-      // Mock validation
-      if (email === 'smartpyq@gmail.com' && password === 'demo123') {
-        const token = 'mock-jwt-token-' + Date.now();
-        const userData = { ...mockUser, email };
-        
-        localStorage.setItem('authToken', token);
-        localStorage.setItem('userData', JSON.stringify(userData));
-        
-        setUser(userData);
-        setIsAuthenticated(true);
-        setIsLoading(false);
-        
-        return { success: true, user: userData };
-      } else {
-        setIsLoading(false);
-        return { success: false, error: 'Invalid email or password' };
-      }
-    } catch (error) {
-      setIsLoading(false);
-      return { success: false, error: 'Login failed. Please try again.' };
-    }
-  };
+      const BACKEND_URL = import.meta.env.VITE_BACKEND_URL || 'http://localhost:8000';
+      const response = await fetch(`${BACKEND_URL}/api/v1/auth/simple-login`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email, password })
+      });
 
-  const register = async (userData) => {
-    setIsLoading(true);
-    
-    try {
-      // Simulate API call
-      await new Promise(resolve => setTimeout(resolve, 2000));
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}));
+        throw new Error(errorData.detail || 'Login failed');
+      }
+
+      const data = await response.json();
       
-      const token = 'mock-jwt-token-' + Date.now();
-      const newUser = {
-        ...mockUser,
-        name: userData.name,
-        email: userData.email,
-        course: userData.course || 'B.Sc Computer Science',
-        stats: {
-          ...mockUser.stats,
-          papersDownloaded: 0,
-          studyStreak: 0,
-          recentActivity: []
-        }
+      // Store tokens
+      localStorage.setItem('auth_token', data.access_token);
+      localStorage.setItem('authToken', data.access_token);
+      localStorage.setItem('refresh_token', data.refresh_token);
+      
+      // Store user data
+      const userData = {
+        id: data.user.id,
+        email: data.user.email,
+        name: data.user.name,
+        role: data.user.role,
+        tenant_id: data.user.tenant_id,
+        avatar: null,
+        course: data.user.course,
+        specialization: data.user.specialization,
+        academic_year: data.user.academic_year,
+        semester: data.user.semester,
+        onboarding_completed: data.user.onboarding_completed,
+        stats: { papersDownloaded: 0, studyStreak: 0 }
       };
       
-      localStorage.setItem('authToken', token);
-      localStorage.setItem('userData', JSON.stringify(newUser));
+      localStorage.setItem('userData', JSON.stringify(userData));
+      localStorage.setItem('user', JSON.stringify(userData));
       
-      setUser(newUser);
+      setUser(userData);
       setIsAuthenticated(true);
       setIsLoading(false);
       
-      return { success: true, user: newUser };
+      return { success: true, user: userData };
     } catch (error) {
       setIsLoading(false);
-      return { success: false, error: 'Registration failed. Please try again.' };
+      return { success: false, error: error.message || 'Login failed. Please try again.' };
     }
-  };
+  }, []);
 
-  const logout = () => {
+  const register = useCallback(async (userData) => {
+    // This is now a lightweight helper used by RegisterPage for non-critical steps
+    // The actual account creation happens via /api/v1/auth/register-complete
+    return { success: true };
+  }, []);
+
+  const logout = useCallback(async () => {
+    // Try to call backend logout to invalidate tokens
+    try {
+      const token = localStorage.getItem('auth_token') || localStorage.getItem('authToken');
+      if (token) {
+        const BACKEND_URL = import.meta.env.VITE_BACKEND_URL || 'http://localhost:8000';
+        await fetch(`${BACKEND_URL}/api/v1/auth/logout`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${token}`
+          }
+        }).catch(() => {}); // Best-effort backend logout
+      }
+    } catch (e) {
+      // Ignore errors on logout
+    }
+    // Clear all token keys
+    localStorage.removeItem('auth_token');
     localStorage.removeItem('authToken');
     localStorage.removeItem('userData');
-    setUser(null);
-    setIsAuthenticated(false);
-  };
+    localStorage.removeItem('user');
+    localStorage.removeItem('refresh_token');      setUser(null);
+      setIsAuthenticated(false);
+  }, []);
 
-  const updateUser = (updatedData) => {
+  const refreshAccessToken = useCallback(async () => {
+    try {
+      const refreshToken = localStorage.getItem('refresh_token');
+      if (!refreshToken) return false;
+      
+      const BACKEND_URL = import.meta.env.VITE_BACKEND_URL || 'http://localhost:8000';
+      const response = await fetch(`${BACKEND_URL}/api/v1/auth/refresh`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ refresh_token: refreshToken })
+      });
+      
+      if (response.ok) {
+        const data = await response.json();
+        localStorage.setItem('auth_token', data.access_token);
+        localStorage.setItem('authToken', data.access_token);
+        if (data.refresh_token) {
+          localStorage.setItem('refresh_token', data.refresh_token);
+        }
+        return true;
+      }
+      return false;
+    } catch (e) {
+      return false;
+    }
+  }, []);
+
+  // Global fetch interceptor for 401 responses
+  useEffect(() => {
+    const originalFetch = window.fetch;
+    window.fetch = async (...args) => {
+      const response = await originalFetch(...args);
+      if (response.status === 401 && isAuthenticated) {
+        const refreshed = await refreshAccessToken();
+        if (!refreshed) {
+          // Token refresh failed, log out
+          logout();
+        }
+      }
+      return response;
+    };
+    return () => { window.fetch = originalFetch; };
+  }, [isAuthenticated]);
+
+  // Periodic token refresh - check every 30 minutes
+  useEffect(() => {
+    if (!isAuthenticated) return;
+    
+    const interval = setInterval(async () => {
+      const token = localStorage.getItem('auth_token') || localStorage.getItem('authToken');
+      if (!token) return;
+      
+      try {
+        const payload = JSON.parse(atob(token.split('.')[1]));
+        const now = Math.floor(Date.now() / 1000);
+        const timeLeft = payload.exp - now;
+        
+        // If token expires in less than 1 hour, refresh it
+        if (timeLeft < 3600 && timeLeft > 0) {
+          await refreshAccessToken();
+        }
+      } catch (e) {
+        // Token might be malformed, try refresh
+        await refreshAccessToken();
+      }
+    }, 30 * 60 * 1000); // Check every 30 minutes
+    
+    return () => clearInterval(interval);
+  }, [isAuthenticated]);
+
+  const updateUser = useCallback((updatedData) => {
     const updatedUser = { ...user, ...updatedData };
     setUser(updatedUser);
     localStorage.setItem('userData', JSON.stringify(updatedUser));
-  };
+  }, []);
 
-  const forgotPassword = async (email) => {
-    setIsLoading(true);
-    
+  const fetchProfile = useCallback(async () => {
     try {
-      // Simulate API call
-      await new Promise(resolve => setTimeout(resolve, 1000));
-      setIsLoading(false);
-      return { success: true, message: 'Password reset link sent to your email' };
-    } catch (error) {
-      setIsLoading(false);
-      return { success: false, error: 'Failed to send reset link' };
+      const token = localStorage.getItem('auth_token') || localStorage.getItem('authToken');
+      if (!token) return;
+      const BACKEND_URL = import.meta.env.VITE_BACKEND_URL || 'http://localhost:8000';
+      const response = await fetch(`${BACKEND_URL}/api/v1/auth/profile`, {
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+      if (response.ok) {
+        const profile = await response.json();
+        const updatedUser = {
+          id: profile.id,
+          email: profile.email,
+          name: profile.name,
+          role: profile.role,
+          tenant_id: profile.tenant_id,
+          avatar: null,
+          course: profile.course,
+          specialization: profile.specialization,
+          academic_year: profile.academic_year,
+          semester: profile.semester,
+          onboarding_completed: profile.onboarding_completed,
+          stats: { papersDownloaded: 0, studyStreak: 0 }
+        };
+        setUser(updatedUser);
+        localStorage.setItem('userData', JSON.stringify(updatedUser));
+        localStorage.setItem('user', JSON.stringify(updatedUser));
+      }
+    } catch (e) {
+      console.error('Failed to fetch profile:', e);
     }
-  };
+  }, []);
 
-  const value = {
+  const completeOnboarding = useCallback(async (onboardingData) => {
+    try {
+      const token = localStorage.getItem('auth_token') || localStorage.getItem('authToken');
+      const BACKEND_URL = import.meta.env.VITE_BACKEND_URL || 'http://localhost:8000';
+      const response = await fetch(`${BACKEND_URL}/api/v1/auth/onboarding`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+        body: JSON.stringify(onboardingData)
+      });
+      if (!response.ok) {
+        const err = await response.json().catch(() => ({}));
+        throw new Error(err.detail || 'Onboarding failed');
+      }
+      // Refresh profile to get updated data
+      await fetchProfile();
+      return { success: true };
+    } catch (error) {
+      return { success: false, error: error.message };
+    }
+  }, [fetchProfile]);
+
+  const updateAcademicProfile = useCallback(async (academicData) => {
+    try {
+      const token = localStorage.getItem('auth_token') || localStorage.getItem('authToken');
+      const BACKEND_URL = import.meta.env.VITE_BACKEND_URL || 'http://localhost:8000';
+      const response = await fetch(`${BACKEND_URL}/api/v1/auth/profile/academic`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+        body: JSON.stringify(academicData)
+      });
+      if (!response.ok) {
+        const err = await response.json().catch(() => ({}));
+        throw new Error(err.detail || 'Update failed');
+      }
+      await fetchProfile();
+      return { success: true };
+    } catch (error) {
+      return { success: false, error: error.message };
+    }
+  }, [fetchProfile]);
+
+  const deleteAccount = useCallback(async (password) => {
+    try {
+      const token = localStorage.getItem('auth_token') || localStorage.getItem('authToken');
+      if (!token) throw new Error('Not authenticated');
+
+      const BACKEND_URL = import.meta.env.VITE_BACKEND_URL || 'http://localhost:8000';
+      const response = await fetch(`${BACKEND_URL}/api/v1/auth/delete-account`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify({ password, confirmation: 'DELETE' })
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}));
+        throw new Error(errorData.detail || 'Account deletion failed');
+      }
+
+      // Clear all stored auth data
+      localStorage.removeItem('auth_token');
+      localStorage.removeItem('authToken');
+      localStorage.removeItem('refresh_token');
+      localStorage.removeItem('userData');
+      localStorage.removeItem('user');
+
+      setUser(null);
+      setIsAuthenticated(false);
+
+      return { success: true };
+    } catch (error) {
+      return { success: false, error: error.message };
+    }
+  }, []);
+
+  // Demo user detection
+  const isDemoUser = user?.role === 'demo' || user?.email === 'sumer@edu.in';
+
+  // Memoize context value to prevent unnecessary re-renders of consumers
+  const value = useMemo(() => ({
     user,
     isAuthenticated,
     isLoading,
+    isDemoUser,
     login,
     register,
     logout,
     updateUser,
-    forgotPassword
-  };
+    fetchProfile,
+    completeOnboarding,
+    updateAcademicProfile,
+    deleteAccount
+  }), [user, isAuthenticated, isLoading, isDemoUser, login, register, logout, updateUser, fetchProfile, completeOnboarding, updateAcademicProfile, deleteAccount]);
 
   return (
     <AuthContext.Provider value={value}>

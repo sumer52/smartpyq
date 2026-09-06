@@ -481,3 +481,7 @@ class StorageAdapter:
                 raise
         else:
             raise NotImplementedError("Direct upload URLs only supported for S3 backend")
+
+
+# Alias for backward compatibility
+StorageService = StorageAdapter

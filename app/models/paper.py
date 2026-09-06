@@ -37,6 +37,14 @@ class ExamType(str, Enum):
     OTHER = "other"
 
 
+class ProcessingStatus(str, Enum):
+    """Processing status enumeration for paper upload pipeline."""
+    UPLOADED = "uploaded"      # File uploaded, awaiting processing
+    PROCESSING = "processing"  # Being processed
+    COMPLETED = "completed"    # Processing complete
+    FAILED = "failed"          # Processing failed
+
+
 class DifficultyLevel(str, Enum):
     """Difficulty level enumeration."""
     EASY = "easy"
@@ -64,7 +72,8 @@ class Paper(Base):
     subject = Column(String(255), nullable=False, index=True)
     university = Column(String(255), nullable=False, index=True)
     course = Column(String(255), nullable=True, index=True)
-    stream = Column(String(255), nullable=True)
+    stream = Column(String(255), nullable=True, index=True)
+    specialization = Column(String(255), nullable=True, index=True)  # e.g., MSCS, MSDS, General
     
     # Time-based metadata
     year = Column(Integer, nullable=False, index=True)
@@ -91,6 +100,10 @@ class Paper(Base):
     # Content extraction
     extracted_text = Column(Text, nullable=True)  # OCR/extracted text
     page_count = Column(Integer, nullable=True)
+    
+    # Processing status for upload pipeline
+    processing_status = Column(SQLEnum(ProcessingStatus), default=ProcessingStatus.UPLOADED, nullable=False, index=True)
+    processing_error = Column(Text, nullable=True)
     
     # Status and moderation
     status = Column(SQLEnum(PaperStatus), default=PaperStatus.DRAFT, nullable=False, index=True)
@@ -247,6 +260,7 @@ class Paper(Base):
             "university": self.university,
             "course": self.course,
             "stream": self.stream,
+            "specialization": self.specialization,
             "year": self.year,
             "semester": self.semester,
             "semester_year": self.semester_year,
@@ -261,6 +275,8 @@ class Paper(Base):
             "file_size_mb": self.file_size_mb,
             "file_type": self.file_type,
             "page_count": self.page_count,
+            "processing_status": self.processing_status.value if self.processing_status else None,
+            "processing_error": self.processing_error,
             "status": self.status.value,
             "tenant_id": self.tenant_id,
             "uploader_id": self.uploader_id,

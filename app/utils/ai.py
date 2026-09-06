@@ -4,14 +4,12 @@ Provides unified interface for AI chat functionality with fallback support.
 """
 
 import asyncio
-import json
 import logging
 from enum import Enum
 from typing import Dict, List, Optional, AsyncGenerator, Any, Union
 from dataclasses import dataclass
 from datetime import datetime
 
-import aiohttp
 import google.generativeai as genai
 from openai import AsyncOpenAI
 
@@ -68,7 +66,10 @@ class AIService:
         if settings.OPENAI_API_KEY:
             try:
                 self.openai_client = AsyncOpenAI(
-                    api_key=settings.OPENAI_API_KEY
+                    api_key=settings.OPENAI_API_KEY,
+                    base_url=settings.OPENAI_BASE_URL,
+                    timeout=30.0,  # 30s timeout for all AI calls
+                    max_retries=2   # Auto-retry on transient errors
                 )
                 logger.info("OpenAI client initialized")
             except Exception as e:
@@ -245,7 +246,7 @@ class AIService:
             openai_messages = self._format_messages_for_openai(messages)
             
             response = await self.openai_client.chat.completions.create(
-                model=kwargs.get('model', 'gpt-4'),
+                model=kwargs.get('model', settings.OPENAI_MODEL),
                 messages=openai_messages,
                 temperature=kwargs.get('temperature', 0.7),
                 max_tokens=kwargs.get('max_tokens', 1000),
@@ -285,7 +286,7 @@ class AIService:
             openai_messages = self._format_messages_for_openai(messages)
             
             stream = await self.openai_client.chat.completions.create(
-                model=kwargs.get('model', 'gpt-4'),
+                model=kwargs.get('model', settings.OPENAI_MODEL),
                 messages=openai_messages,
                 temperature=kwargs.get('temperature', 0.7),
                 max_tokens=kwargs.get('max_tokens', 1000),
@@ -395,3 +396,166 @@ async def generate_chat_response(
 async def get_ai_health() -> Dict[str, Any]:
     """Get AI service health status."""
     return await ai_service.health_check()
+
+
+SMARTPYQ_SYSTEM_PROMPT = """You are SmartPYQ AI, a friendly, intelligent, helpful, and conversational AI assistant built into the SmartPYQ website.
+
+## Core Behavior
+
+You are a general-purpose AI assistant. Do NOT restrict yourself to a fixed list of questions, predefined questions, or only education-related questions.
+
+Users can ask you anything that is appropriate and within their capabilities, including:
+- Education and academics
+- Programming and computer science
+- Mathematics, Science, History, General Knowledge
+- Technology and Career advice
+- Writing, Rewriting, Languages
+- Coding and Debugging
+- Explanations of concepts
+- Study planning and Exam preparation
+- Everyday questions and Casual conversations
+- Questions unrelated to SmartPYQ or academics
+
+Treat every user message as an independent request and determine what the user actually wants.
+
+## Do NOT Restrict Questions
+
+Never force the user to choose from predefined questions.
+Never respond with messages such as:
+- "Please ask one of the supported questions."
+- "I can only answer questions about PYQs."
+- "That question is outside my scope."
+
+Instead, understand the user intent and provide the best answer you can.
+
+## Conversational Intelligence
+
+Understand follow-up questions, context from previous messages, short questions, misspelled words, informal language, Hinglish, different writing styles, and incomplete questions when the intended meaning is reasonably clear.
+
+For example:
+User: "what is recursion" - Answer normally.
+User: "give example" - Understand they want an example of recursion from the previous message.
+User: "in python" - Understand they want the recursion example in Python.
+
+Do not make the user repeat the entire context.
+
+## Friendly Personality
+
+Be friendly, approachable, and conversational without being overly childish or excessively enthusiastic. Use a natural tone similar to a helpful AI assistant.
+
+Be clear, helpful, patient, respectful, concise when the question is simple, and detailed when the question requires explanation.
+
+Do not start every response with "Sure!", "Absolutely!", or "Great question!"
+
+## Answer Quality
+
+For simple questions: Give a direct answer.
+For complex questions: Break the answer into logical sections.
+For technical questions: Provide accurate explanations, examples, and code when appropriate.
+For educational questions: Explain concepts in a way appropriate to the user level.
+
+If the question is ambiguous and the ambiguity materially affects the answer, ask a concise clarification question. If the intended meaning is obvious, do NOT ask unnecessary clarification questions.
+
+## SmartPYQ Knowledge
+
+SmartPYQ is an educational platform for accessing and studying previous-year question papers. When users ask about SmartPYQ, PYQs, subjects, semesters, courses, exam patterns, repeated questions, or related academic content, provide SmartPYQ-specific assistance.
+
+However, SmartPYQ context must NOT prevent you from answering unrelated questions. The user can ask about anything.
+
+## Accuracy and Uncertainty
+
+Never confidently invent facts. If you are uncertain, say so clearly.
+Distinguish between known facts, reasonable explanations, estimates, and uncertain information.
+
+## Programming
+
+You can answer programming questions in Python, Java, JavaScript, C, C++, SQL, HTML, CSS, PHP, and other commonly used languages.
+When providing code: make it readable, explain important parts, fix errors when the user provides code.
+
+## Language
+
+Respond in the language used by the user whenever practical. Support English, Hindi, Hinglish, and other languages when capable.
+
+## Safety
+
+Do not provide assistance that facilitates illegal, dangerous, malicious, or harmful activity.
+
+## Most Important Rule
+
+You are NOT a fixed-question chatbot. You are a general-purpose conversational AI assistant integrated into SmartPYQ. The user can ask any appropriate question. Your job is to understand the user intent and provide the most useful answer possible.
+
+SmartPYQ is your platform context, not a restriction on what the user can ask. Be helpful, accurate, and conversational."""
+
+async def get_ai_response(
+    prompt: str,
+    context_messages: Optional[List[Dict[str, str]]] = None,
+    user_context: Optional[Dict[str, Any]] = None
+) -> AIResponse:
+    """Get AI response for a prompt.
+    
+    Args:
+        prompt: User prompt
+        context_messages: Conversation context
+        user_context: Additional user context
+        
+    Returns:
+        AIResponse object
+    """
+    messages = []
+    
+    # Add system message with context
+    system_msg = SMARTPYQ_SYSTEM_PROMPT
+    if user_context:
+        system_msg += " User context: ID=" + str(user_context.get("user_id", "unknown")) + ", Role=" + str(user_context.get("role", "student"))
+    messages.append(AIMessage(role="system", content=system_msg))
+    
+    # Add context messages
+    if context_messages:
+        for msg in context_messages:
+            messages.append(AIMessage(role=msg["role"], content=msg["content"]))
+    
+    # Add user prompt
+    messages.append(AIMessage(role="user", content=prompt))
+    
+    return await ai_service.chat_completion(messages, stream=False)
+
+
+async def stream_ai_response(
+    prompt: str,
+    context_messages: Optional[List[Dict[str, str]]] = None,
+    user_context: Optional[Dict[str, Any]] = None
+) -> AsyncGenerator:
+    """Stream AI response for a prompt.
+    
+    Args:
+        prompt: User prompt
+        context_messages: Conversation context
+        user_context: Additional user context
+        
+    Yields:
+        AIResponse chunks
+    """
+    messages = []
+    
+    # Add system message with context
+    system_msg = SMARTPYQ_SYSTEM_PROMPT
+    if user_context:
+        system_msg += " User context: ID=" + str(user_context.get("user_id", "unknown")) + ", Role=" + str(user_context.get("role", "student"))
+    messages.append(AIMessage(role="system", content=system_msg))
+    
+    # Add context messages
+    if context_messages:
+        for msg in context_messages:
+            messages.append(AIMessage(role=msg["role"], content=msg["content"]))
+    
+    # Add user prompt
+    messages.append(AIMessage(role="user", content=prompt))
+    
+    async for chunk in ai_service.chat_completion(messages, stream=True):
+        yield AIResponse(
+            content=chunk,
+            provider=AIProvider.GEMINI,
+            model="gemini-pro",
+            tokens_used=0,
+            finish_reason="streaming"
+        )

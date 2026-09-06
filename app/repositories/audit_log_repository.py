@@ -21,7 +21,7 @@ from app.core.exceptions import ValidationError
 class AuditLogRepository(BaseRepository[AuditLog]):
     """Repository for audit log operations."""
     
-    def __init__(self, db: AsyncSession):
+    def __init__(self, db=None):
         super().__init__(db, AuditLog)
     
     async def create_log(

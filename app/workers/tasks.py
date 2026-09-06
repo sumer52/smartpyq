@@ -21,7 +21,7 @@ from sqlalchemy.orm import Session
 from .celery_app import celery_app
 from ..core.database import get_db_session
 from ..core.config import settings
-from ..models import Paper, PaperVersion, User, Tenant, Subscriber, ChatSession
+from ..models import Paper, User
 from ..utils.storage import StorageAdapter
 from ..utils.email import EmailService
 from ..utils.pdf_processor import PDFProcessor
@@ -29,7 +29,7 @@ from ..utils.security import VirusScanner
 from ..repositories import (
     PaperRepository,
     UserRepository,
-    SubscriberRepository,
+
     ChatRepository,
     AuditLogRepository
 )
@@ -303,7 +303,7 @@ def send_newsletter_task(self, newsletter_data: Dict[str, Any], batch_size: int 
     """
     try:
         with get_db_session() as db:
-            subscriber_repo = SubscriberRepository(db)
+
             
             # Get all active subscribers
             subscribers = subscriber_repo.get_active_subscribers()
@@ -521,3 +521,7 @@ def _cleanup_temp_files(file_paths: List[Optional[str]]) -> None:
                 logger.debug(f"Cleaned up temp file: {file_path}")
             except Exception as e:
                 logger.warning(f"Failed to cleanup temp file {file_path}: {str(e)}")
+
+# Alias for backward compatibility
+process_paper_upload = process_upload_task
+send_newsletter_batch = send_newsletter_task

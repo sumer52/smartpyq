@@ -8,7 +8,6 @@ import {
   DocumentTextIcon,
   ExclamationTriangleIcon,
 } from '@heroicons/react/24/outline';
-
 const PrivacyPage = () => {
   const sections = [
     {
@@ -126,9 +125,7 @@ const PrivacyPage = () => {
       ]
     }
   ];
-
   const lastUpdated = 'January 15, 2024';
-
   return (
     <div className="min-h-screen bg-gradient-to-br from-bg-dark via-slate-900 to-bg-dark">
       {/* Hero Section */}
@@ -153,7 +150,6 @@ const PrivacyPage = () => {
               Last updated: {lastUpdated}
             </p>
           </motion.div>
-
           {/* Introduction */}
           <motion.div
             initial={{ opacity: 0, y: 20 }}
@@ -169,7 +165,6 @@ const PrivacyPage = () => {
               By using SmartPYQ, you agree to the collection and use of information in accordance with this policy. If you do not agree with our policies and practices, please do not use our service.
             </p>
           </motion.div>
-
           {/* Privacy Sections */}
           <div className="space-y-8">
             {sections.map((section, index) => {
@@ -188,7 +183,6 @@ const PrivacyPage = () => {
                     </div>
                     <h2 className="text-2xl font-bold text-white">{section.title}</h2>
                   </div>
-                  
                   <div className="space-y-6">
                     {section.content.map((item, itemIndex) => (
                       <div key={itemIndex}>
@@ -205,7 +199,6 @@ const PrivacyPage = () => {
               );
             })}
           </div>
-
           {/* Data Retention */}
           <motion.div
             initial={{ opacity: 0, y: 20 }}
@@ -221,7 +214,6 @@ const PrivacyPage = () => {
               Uploaded papers and associated metadata may be retained longer to maintain the integrity of our database and provide continued service to other users, but will be disassociated from your personal information.
             </p>
           </motion.div>
-
           {/* International Transfers */}
           <motion.div
             initial={{ opacity: 0, y: 20 }}
@@ -234,7 +226,6 @@ const PrivacyPage = () => {
               Your information may be transferred to and processed in countries other than your own. We ensure that such transfers comply with applicable data protection laws and that appropriate safeguards are in place to protect your information.
             </p>
           </motion.div>
-
           {/* Children's Privacy */}
           <motion.div
             initial={{ opacity: 0, y: 20 }}
@@ -247,7 +238,6 @@ const PrivacyPage = () => {
               SmartPYQ is not intended for children under 13 years of age. We do not knowingly collect personal information from children under 13. If you are a parent or guardian and believe your child has provided us with personal information, please contact us so we can delete such information.
             </p>
           </motion.div>
-
           {/* Changes to Policy */}
           <motion.div
             initial={{ opacity: 0, y: 20 }}
@@ -263,7 +253,6 @@ const PrivacyPage = () => {
               We encourage you to review this Privacy Policy periodically to stay informed about how we are protecting your information.
             </p>
           </motion.div>
-
           {/* Contact Information */}
           <motion.div
             initial={{ opacity: 0, y: 20 }}
@@ -278,17 +267,13 @@ const PrivacyPage = () => {
             <div className="flex flex-col sm:flex-row gap-4 justify-center">
               <motion.button
                 onClick={() => window.location.href = '/contact'}
-                className="btn-primary px-6 py-3 font-semibold"
-                whileHover={{ scale: 1.05 }}
-                whileTap={{ scale: 0.95 }}
+                className="btn btn-primary px-6 py-3 font-semibold"
               >
                 Contact Support
               </motion.button>
               <motion.a
                 href="mailto:privacy@smartpyq.com"
-                className="px-6 py-3 border border-brand-500 text-brand-400 rounded-lg font-semibold hover:bg-brand-500/10 transition-colors duration-200"
-                whileHover={{ scale: 1.05 }}
-                whileTap={{ scale: 0.95 }}
+                className="btn btn-secondary px-6 py-3 font-semibold"
               >
                 privacy@smartpyq.com
               </motion.a>
@@ -299,5 +284,4 @@ const PrivacyPage = () => {
     </div>
   );
 };
-
 export default PrivacyPage;

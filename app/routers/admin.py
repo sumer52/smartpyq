@@ -15,7 +15,7 @@ from fastapi import (
     Query,
     Form
 )
-from pydantic import BaseModel, EmailStr, Field
+from pydantic import BaseModel, Field
 
 from ..core.dependencies import (
     get_current_active_user,
@@ -53,7 +53,7 @@ class TenantResponse(BaseModel):
 class TenantCreateRequest(BaseModel):
     """Tenant creation request"""
     name: str = Field(..., min_length=3, max_length=100)
-    slug: str = Field(..., min_length=3, max_length=50, regex="^[a-z0-9-]+$")
+    slug: str = Field(..., min_length=3, max_length=50, pattern="^[a-z0-9-]+$")
     allowed_domains: List[str] = Field(..., min_items=1)
     access_code: str = Field(..., min_length=6, max_length=50)
     

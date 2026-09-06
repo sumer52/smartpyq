@@ -104,7 +104,7 @@ celery_app.conf.task_annotations = {
 @celery_app.task(bind=True)
 def debug_task(self):
     """Debug task for testing Celery setup"""
-    print(f"Request: {self.request!r}")
+    logger.debug(f"Request: {self.request!r}")
     return "Debug task completed"
 
 # Task failure handler
@@ -123,8 +123,7 @@ def task_failure_handler(self, task_id, error, traceback):
 # Register signal handlers
 from celery.signals import task_failure
 
-@task_failure.connect
-def task_failure_handler_signal(sender=None, task_id=None, exception=None, traceback=None, einfo=None):
+def task_failure_handler_signal(sender=None, task_id=None, exception=None, traceback=None, einfo=None, **kwargs):
     """Handle task failure signals"""
     logger.error(
         f"Task {task_id} failed: {exception}",
@@ -135,6 +134,8 @@ def task_failure_handler_signal(sender=None, task_id=None, exception=None, trace
             "traceback": str(traceback)
         }
     )
+
+task_failure.connect(task_failure_handler_signal)
 
 if __name__ == "__main__":
     celery_app.start()

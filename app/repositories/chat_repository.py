@@ -20,7 +20,7 @@ from app.core.exceptions import ValidationError, NotFoundError
 class ChatRepository(BaseRepository[ChatSession]):
     """Repository for chat session operations."""
     
-    def __init__(self, db: AsyncSession):
+    def __init__(self, db=None):
         super().__init__(db, ChatSession)
     
     async def get_by_uuid(
@@ -280,7 +280,7 @@ class ChatRepository(BaseRepository[ChatSession]):
 class ChatMessageRepository(BaseRepository[ChatMessage]):
     """Repository for chat message operations."""
     
-    def __init__(self, db: AsyncSession):
+    def __init__(self, db=None):
         super().__init__(db, ChatMessage)
     
     async def get_session_messages(
